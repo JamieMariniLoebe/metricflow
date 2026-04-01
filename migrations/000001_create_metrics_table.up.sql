@@ -4,6 +4,6 @@ CREATE TABLE metrics (
     metric_type VARCHAR(50),
     labels JSONB,
     val NUMERIC,
-    created_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ, DEFAULT CURRENT_
     measured_at TIMESTAMPTZ
 )
