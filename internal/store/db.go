@@ -1,22 +1,19 @@
 // Package store handles database logic
 package store
 
-import "database/sql"
+import (
+	"context"
 
-func NewPool(databaseURL string) (*sql.DB, error) {
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
-	db, err := sql.Open("postgres", databaseURL)
+func NewPool(databaseURL string) (*pgxpool.Pool, error) {
+
+	db, err := pgxpool.New(context.Background(), databaseURL)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if failErr := db.Ping(); failErr != nil {
-		return nil, failErr
-	}
-
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-
-	return db, err
+	return db, nil
 }

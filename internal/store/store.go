@@ -2,17 +2,17 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Store struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
-func NewStore(pool *sql.DB) *Store {
+func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{
 		db: pool,
 	}
@@ -27,7 +27,7 @@ func (s *Store) InsertMetric(ctx context.Context, metric models.Metric) error {
 		return err
 	}
 
-	_, err = s.db.ExecContext(ctx, query, metric.MetricName, metric.MetricType, postgresLabels, metric.Val, metric.MeasuredAt)
+	_, err = s.db.Exec(ctx, query, metric.MetricName, metric.MetricType, postgresLabels, metric.Val, metric.MeasuredAt)
 
 	return err
 }

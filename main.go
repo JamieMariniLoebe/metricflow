@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/database"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
@@ -23,7 +24,8 @@ func main() {
 		log.Fatal("Fatal error")
 	}
 
-	if err := database.RunMigrations(dbURL, sourceURL); err != nil {
+	pgxURL := strings.Replace(dbURL, "postgres://", "pgx5://", 1)
+	if err := database.RunMigrations(pgxURL, sourceURL); err != nil {
 		log.Fatal("Error")
 	}
 
