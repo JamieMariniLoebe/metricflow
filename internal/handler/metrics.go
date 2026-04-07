@@ -4,6 +4,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
@@ -45,4 +46,49 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(met)
+}
+
+func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	params := r.URL.Query()
+
+	var filter models.MetricFilter
+	var err error
+	metrics := []models.Metric{}
+
+	if params.Get("metric_name") != "" {
+		filter.MetricName = params.Get("metric_name")
+	}
+
+	if params.Get("metric_type") != "" {
+		filter.MetricType = params.Get("metric_type")
+	}
+
+	if params.Get("start_time") != "" {
+		filter.StartTime, err = time.Parse(time.RFC3339, params.Get("start_time"))
+
+		if err != nil {
+			http.Error(w, "Invalid start_time format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if params.Get("end_time") != "" {
+		filter.EndTime, err = time.Parse(time.RFC3339, params.Get("end_time"))
+
+		if err != nil {
+			http.Error(w, "Invalid end_time format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	metrics, err = h.store.GetMetrics(r.Context(), filter)
+
+	if err != nil {
+		http.Error(w, "Internal service error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(metrics)
 }

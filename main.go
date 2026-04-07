@@ -51,6 +51,8 @@ func main() {
 
 	r.Post("/metrics", h.CreateMetric)
 
+	r.Get("/metrics", h.GetMetrics)
+
 	log.Println("MetricFlow starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
 
