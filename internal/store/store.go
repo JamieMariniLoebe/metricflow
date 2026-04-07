@@ -10,16 +10,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Store holds a PostgreSQL connection pool and provides data access methods
 type Store struct {
 	db *pgxpool.Pool
 }
 
+// NewStore creates a Store with the given connection pool
 func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{
 		db: pool,
 	}
 }
 
+// InsertMetric ingests a new metric data point into the database
 func (s *Store) InsertMetric(ctx context.Context, metric models.Metric) error {
 	postgresLabels, err := json.Marshal(metric.Labels)
 
@@ -34,6 +37,7 @@ func (s *Store) InsertMetric(ctx context.Context, metric models.Metric) error {
 	return err
 }
 
+// GetMetrics queries metric data points from the database using optional filters
 func (s *Store) GetMetrics(ctx context.Context, filter models.MetricFilter) ([]models.Metric, error) {
 	var args []any
 	var conditions []string

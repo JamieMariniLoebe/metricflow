@@ -1,4 +1,4 @@
-// Package database handles database setup
+// Package database provides schema migration for PostgreSQL
 package database
 
 import (
@@ -9,6 +9,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+// RunMigrations applies any pending new database schema changes
 func RunMigrations(databaseURL string, sourceURL string) error {
 
 	m, err := migrate.New(sourceURL, databaseURL)

@@ -1,4 +1,4 @@
-// Package handler handles HTTP requests
+// Package handler processes HTTP requests
 package handler
 
 import (
@@ -10,16 +10,19 @@ import (
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
 )
 
+// Handler holds dependencies for HTTP request handlers
 type Handler struct {
 	store *store.Store
 }
 
+// NewHandler creates a Handler with the given store for database access
 func NewHandler(store *store.Store) *Handler {
 	return &Handler{
 		store: store,
 	}
 }
 
+// CreateMetric handles POST requests to ingest a new metric data point
 func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	decode := json.NewDecoder(r.Body)
 	var met models.Metric
@@ -48,6 +51,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(met)
 }
 
+// GetMetrics handles GET requests to query metrics with optional filters
 func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 
