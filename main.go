@@ -49,9 +49,9 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	r.Post("/metrics", h.CreateMetric)
+	r.Post("/api/metrics", h.CreateMetric)
 
-	r.Get("/metrics", h.GetMetrics)
+	r.Get("/api/metrics", h.GetMetrics)
 
 	log.Println("MetricFlow starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
