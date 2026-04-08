@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -18,23 +18,26 @@ func main() {
 	sourceURL := os.Getenv("SOURCE_URL")
 
 	if dbURL == "" {
-		log.Fatal("Empty database_url")
+		slog.Error("Empty database_url")
+		os.Exit(1)
 	}
 
 	if sourceURL == "" {
-		log.Fatal("Empty source_url")
+		slog.Error("Empty source_url")
+		os.Exit(1)
 	}
 
 	pgxURL := strings.Replace(dbURL, "postgres://", "pgx5://", 1)
 
 	if err := database.RunMigrations(pgxURL, sourceURL); err != nil {
-		log.Fatal("Error")
+		slog.Error("migration failed", "error", err)
 	}
 
 	db, err := store.NewPool(dbURL)
 
 	if err != nil {
-		log.Fatal("Error")
+		slog.Error("database connection failed", "error", err)
+		os.Exit(1)
 	}
 
 	defer db.Close()
@@ -53,7 +56,9 @@ func main() {
 
 	r.Get("/api/metrics", h.GetMetrics)
 
-	log.Println("MetricFlow starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	slog.Info("MetricFlow starting", "port", 8080)
+	err = http.ListenAndServe(":8080", r)
+	slog.Error("Listen and serve failed", "error", err)
+	os.Exit(1)
 
 }
