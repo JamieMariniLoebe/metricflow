@@ -8,17 +8,20 @@ import (
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Handler holds dependencies for HTTP request handlers
 type Handler struct {
-	store *store.Store
+	store  *store.Store
+	ingest prometheus.Counter
 }
 
 // NewHandler creates a Handler with the given store for database access
-func NewHandler(store *store.Store) *Handler {
+func NewHandler(store *store.Store, ingest prometheus.Counter) *Handler {
 	return &Handler{
-		store: store,
+		store:  store,
+		ingest: ingest,
 	}
 }
 
@@ -45,6 +48,8 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal service error", http.StatusInternalServerError)
 		return
 	}
+
+	h.ingest.Inc()
 
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

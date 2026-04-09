@@ -9,8 +9,11 @@ import (
 
 	"github.com/JamieMariniLoebe/metricflow/internal/database"
 	"github.com/JamieMariniLoebe/metricflow/internal/handler"
+	"github.com/JamieMariniLoebe/metricflow/internal/metrics"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -42,10 +45,19 @@ func main() {
 
 	defer db.Close()
 
+	reg := prometheus.NewRegistry()
+
+	m := metrics.NewMetrics(reg)
+
 	s := store.NewStore(db)
-	h := handler.NewHandler(s)
+
+	h := handler.NewHandler(s, m.IngestedCounter)
 
 	r := chi.NewRouter()
+
+	r.Use(m.Middleware)
+
+	r.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -57,7 +69,9 @@ func main() {
 	r.Get("/api/metrics", h.GetMetrics)
 
 	slog.Info("MetricFlow starting", "port", 8080)
+
 	err = http.ListenAndServe(":8080", r)
+
 	slog.Error("Listen and serve failed", "error", err)
 	os.Exit(1)
 
