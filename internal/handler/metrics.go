@@ -51,7 +51,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 
 	h.ingest.Inc()
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(met)
 }
@@ -97,7 +97,7 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(metrics)
 }

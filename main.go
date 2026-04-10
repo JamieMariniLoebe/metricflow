@@ -34,6 +34,7 @@ func main() {
 
 	if err := database.RunMigrations(pgxURL, sourceURL); err != nil {
 		slog.Error("migration failed", "error", err)
+		os.Exit(1)
 	}
 
 	db, err := store.NewPool(dbURL)

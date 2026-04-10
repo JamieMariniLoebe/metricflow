@@ -26,11 +26,11 @@ func NewStore(pool *pgxpool.Pool) *Store {
 func (s *Store) InsertMetric(ctx context.Context, metric models.Metric) error {
 	postgresLabels, err := json.Marshal(metric.Labels)
 
-	query := "INSERT INTO metrics (metric_name, metric_type, labels, val, measured_at) VALUES ($1, $2, $3, $4, $5)"
-
 	if err != nil {
 		return err
 	}
+
+	query := "INSERT INTO metrics (metric_name, metric_type, labels, val, measured_at) VALUES ($1, $2, $3, $4, $5)"
 
 	_, err = s.db.Exec(ctx, query, metric.MetricName, metric.MetricType, postgresLabels, metric.Val, metric.MeasuredAt)
 
