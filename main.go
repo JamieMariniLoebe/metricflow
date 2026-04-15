@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/database"
 	"github.com/JamieMariniLoebe/metricflow/internal/handler"
@@ -63,7 +64,7 @@ func main() {
 
 	h := handler.NewHandler(s, m.IngestedCounter, i)
 
-	i.Start(ctx)
+	i.Start(context.Background())
 
 	r := chi.NewRouter()
 
@@ -82,13 +83,24 @@ func main() {
 
 	slog.Info("MetricFlow starting", "port", 8080)
 
-	go http.ListenAndServe(":8080", r)
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
+	go srv.ListenAndServe()
 
 	<-ctx.Done()
 
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP server shutdown failed", "error", err)
+	}
+
 	i.Shutdown()
 
-	slog.Info("Shutdown....", "Info:", context.Cause(ctx))
-	os.Exit(0)
+	slog.Info("Shutdown....", "reason", context.Cause(ctx))
 
 }
