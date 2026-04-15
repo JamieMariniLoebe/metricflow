@@ -60,7 +60,7 @@ func main() {
 
 	s := store.NewStore(db)
 
-	i := ingest.NewIngester(s, 5)
+	i := ingest.NewIngester(s, 5, m.IngestQueueDepth, m.IngestRequestsShedTotal)
 
 	h := handler.NewHandler(s, m.IngestedCounter, i)
 

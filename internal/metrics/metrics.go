@@ -12,9 +12,11 @@ import (
 )
 
 type Metrics struct {
-	requestCounter    *prometheus.CounterVec
-	durationHistogram *prometheus.HistogramVec
-	IngestedCounter   prometheus.Counter
+	requestCounter          *prometheus.CounterVec
+	durationHistogram       *prometheus.HistogramVec
+	IngestedCounter         prometheus.Counter
+	IngestQueueDepth        prometheus.Gauge
+	IngestRequestsShedTotal prometheus.Counter
 }
 
 func NewMetrics(r prometheus.Registerer) *Metrics {
@@ -39,8 +41,20 @@ func NewMetrics(r prometheus.Registerer) *Metrics {
 				Help: "Total number of metrics ingested",
 			},
 		),
+		IngestQueueDepth: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "ingest_queue_depth",
+				Help: "Total number of items in channel",
+			},
+		),
+		IngestRequestsShedTotal: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "ingest_requests_shed_total",
+				Help: "Total number of requests shed",
+			},
+		),
 	}
-	r.MustRegister(m.requestCounter, m.durationHistogram, m.IngestedCounter)
+	r.MustRegister(m.requestCounter, m.durationHistogram, m.IngestedCounter, m.IngestQueueDepth, m.IngestRequestsShedTotal)
 	return m
 }
 
