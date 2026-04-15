@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/database"
 	"github.com/JamieMariniLoebe/metricflow/internal/handler"
+	"github.com/JamieMariniLoebe/metricflow/internal/ingest"
 	"github.com/JamieMariniLoebe/metricflow/internal/metrics"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -46,13 +50,20 @@ func main() {
 
 	defer db.Close()
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	reg := prometheus.NewRegistry()
 
 	m := metrics.NewMetrics(reg)
 
 	s := store.NewStore(db)
 
-	h := handler.NewHandler(s, m.IngestedCounter)
+	i := ingest.NewIngester(s, 5)
+
+	h := handler.NewHandler(s, m.IngestedCounter, i)
+
+	i.Start(ctx)
 
 	r := chi.NewRouter()
 
@@ -71,9 +82,13 @@ func main() {
 
 	slog.Info("MetricFlow starting", "port", 8080)
 
-	err = http.ListenAndServe(":8080", r)
+	go http.ListenAndServe(":8080", r)
 
-	slog.Error("Listen and serve failed", "error", err)
-	os.Exit(1)
+	<-ctx.Done()
+
+	i.Shutdown()
+
+	slog.Info("Shutdown....", "Info:", context.Cause(ctx))
+	os.Exit(0)
 
 }
