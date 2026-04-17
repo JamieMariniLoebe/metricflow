@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.md
+Dockerfile
+docker-compose.yml
+.env
+.env.*
+metricflow
+*.log
+tmp/
