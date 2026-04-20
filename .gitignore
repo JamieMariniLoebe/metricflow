@@ -1,1 +1,19 @@
+# Secrets
+.env
+.env.*
+
+# Build output
+metricflow
+
+# Logs
+*.log
+
+# OS files
 .DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Coverage reports
+coverage.out
