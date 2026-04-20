@@ -30,8 +30,9 @@ func NewMetrics(r prometheus.Registerer) *Metrics {
 		),
 		durationHistogram: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name: "http_request_duration_seconds",
-				Help: "Duration of HTTP requests in seconds by method, path and status",
+				Name:    "http_request_duration_seconds",
+				Help:    "Duration of HTTP requests in seconds by method, path and status",
+				Buckets: []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5},
 			},
 			[]string{"method", "path", "status"},
 		),
