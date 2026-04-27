@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
@@ -34,14 +35,15 @@ func NewIngester(s *store.Store, w int, g prometheus.Gauge, c prometheus.Counter
 	}
 }
 
-func (ig *Ingester) Start(c context.Context) {
+func (ig *Ingester) Start() {
 	for i := 0; i < ig.workers; i++ {
 		ig.wait.Go(func() {
 			for item := range ig.ingest {
-				err := ig.db.InsertMetric(c, item)
-				if err != nil {
+				opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if err := ig.db.InsertMetric(opCtx, item); err != nil {
 					slog.Error("Error processing metric insertion", "error", err, "metric_name", item.MetricName)
 				}
+				cancel()
 				ig.ingestGauge.Dec()
 			}
 		})

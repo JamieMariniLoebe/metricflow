@@ -64,7 +64,7 @@ func main() {
 
 	h := handler.NewHandler(s, m.IngestedCounter, i)
 
-	i.Start(context.Background())
+	i.Start()
 
 	r := chi.NewRouter()
 
