@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: metricflow
+  labels:
+    app.kubernetes.io/name: metricflow
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    app.kubernetes.io/name: metricflow
+    app.kubernetes.io/component: api
+  ports:
+  - port: 8080
+    targetPort: 8080

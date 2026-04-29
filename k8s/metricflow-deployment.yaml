@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metricflow
+  labels:
+    app.kubernetes.io/name: metricflow
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metricflow
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metricflow
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+      - name: metricflow
+        image: metricflow:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: metricflow-secret
+                key: DB_USER
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: metricflow-secret
+                key: DB_PASSWORD
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: metricflow-config
+                key: DB_HOST
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: metricflow-config
+                key: DB_PORT
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: metricflow-config
+                key: DB_NAME
+          - name: SOURCE_URL
+            valueFrom:
+              configMapKeyRef:
+                name: metricflow-config
+                key: SOURCE_URL
+          - name: DATABASE_URL
+            value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+
+

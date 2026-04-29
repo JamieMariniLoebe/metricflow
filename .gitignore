@@ -18,3 +18,5 @@
 
 # Coverage reports
 coverage.out
+
+k8s/metricflow-secret.yaml
