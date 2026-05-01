@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -19,7 +20,7 @@ type Metrics struct {
 	IngestRequestsShedTotal prometheus.Counter
 }
 
-func NewMetrics(r prometheus.Registerer) *Metrics {
+func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 	m := &Metrics{
 		requestCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -56,6 +57,57 @@ func NewMetrics(r prometheus.Registerer) *Metrics {
 		),
 	}
 	r.MustRegister(m.requestCounter, m.durationHistogram, m.IngestedCounter, m.IngestQueueDepth, m.IngestRequestsShedTotal)
+
+	r.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "pgxpool_acquired_conns",
+			Help: "Currently acquired connections",
+		},
+		func() float64 {
+			return float64(pool.Stat().AcquiredConns())
+		},
+	))
+
+	r.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "pgxpool_idle_conns",
+			Help: "Currently idle connections",
+		},
+		func() float64 {
+			return float64(pool.Stat().IdleConns())
+		},
+	))
+
+	r.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "pgxpool_max_conns",
+			Help: "Current maximum connections",
+		},
+		func() float64 {
+			return float64(pool.Stat().MaxConns())
+		},
+	))
+
+	r.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "pgxpool_acquire_wait_seconds",
+			Help: "Total time spent waiting due to pool being empty",
+		},
+		func() float64 {
+			return pool.Stat().EmptyAcquireWaitTime().Seconds()
+		},
+	))
+
+	r.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "pgxpool_acquire_duration_seconds",
+			Help: "Total time spent acquiring",
+		},
+		func() float64 {
+			return pool.Stat().AcquireDuration().Seconds()
+		},
+	))
+
 	return m
 }
 

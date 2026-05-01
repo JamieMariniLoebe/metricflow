@@ -50,13 +50,12 @@ func main() {
 	}
 
 	defer db.Close()
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	reg := prometheus.NewRegistry()
 
-	m := metrics.NewMetrics(reg)
+	m := metrics.NewMetrics(reg, db)
 
 	s := store.NewStore(db)
 
