@@ -139,6 +139,86 @@ The provisioned Grafana dashboard shows five panels: request rate by status, lat
 
 ---
 
+## Design Decisions
+
+### 1. HTTP Router: Chi
+
+Chi was chosen over Gin and Echo because MetricFlow's routing needs are narrow. It only needs a handful of endpoints, no template rendering necessary, and no opinionated middleware stack. Chi's composability matches that scope cleanly, without any noise. Chi is also stdlib-adjacent: it wraps `net/http` without replacing it, which means every handler signature is the same (`http.Handler`), every middleware is composable with anything else in the Go HTTP ecosystem, and there is no framework-specific context leaking through the code. As one example, MetricFlow's Prometheus middleware uses Chi's `RouteContext().RoutePattern()` so that in the event path parameters are added, Prometheus labels and cardinality stay bounded.
+
+It's true that Gin and Echo offer more features, such as built-in validation, binding helpers, etc. However, more features means more surface area to explain and more deviation from idiomatic Go. The goal of MetricFlow was to create a service that reads like Go, and not like a specific framework or ecosystem.
+
+_Trade-off:_ All of that said, Chi's minimalistic nature means assembling things that Gin would just give for free. Within MetricFlow's scope, that's a feature, not a defect. But on a CRUD-heavy service with dozens of endpoints, that calculus flips.
+
+---
+
+### 2. DB Driver: pgx (over GORM)
+
+`pgx/v5` was chosen over GORM because MetricFlow's SQL surface is small, stable, and performance-sensitive — exactly the kind of workload where GORM abstraction becomes more cost than benefit. GORM is built to reduce boilerplate for CRUD-heavy apps with numerous entities, complex relationships, and ad-hoc queries. MetricFlow, on the other hand, has one insert, one parameterized read with optional filters, and a single JSONB labels column. There's no boilerplate here worth abstracting away, so the GORM layer just adds overhead without actually simplifying anything.
+
+`pgx` also gives direct, idiomatic support for PostgreSQL-specific types (such as JSONB, which the labels column relies on) and natively uses Postgres's binary protocol, which is faster than the text-based protocol older drivers such as `lib/pq` use. In contrast to GORM, `pgxpool` exposes pool internals directly as observable state, which closes the observability loop. In MetricFlow specifically, `InsertMetric` marshals the labels map directly to JSONB through a parameterized query, and `Store` holds a `pgxpool.Pool` so the pool state is observable from the driver layer on up. I also considered `database/sql` and `lib/pq`; ultimately `pgx` was chosen due to active maintenance, native binary protocol, and the richer Postgres-specific features.
+
+_Trade-off:_ `pgx` does, however, require writing SQL by hand and handling pgx-specific types and result scanning. But for a service with a small, stable query surface like MetricFlow, this is a net positive. The SQL is visible, testable, and tunable.
+
+---
+
+### 3. Concurrency: Buffered Channel + Worker Pool
+
+The ingestion pipeline uses a bounded buffered channel as the work queue with a fixed-size goroutine pool draining it. Buffer size is 25; worker count is 5. I chose this pattern because it makes backpressure explicit and measurable: the channel has a defined capacity, and a non-blocking send onto a full channel is the load-shedding signal.
+
+The alternative — spawning a new goroutine for each request — is the easiest Go concurrency pattern, but it gives up all control over resource consumption. Unbounded goroutine counts under sustained load ultimately lead to memory growth, scheduler pressure, and exhausted database connections, with no clean way to shed load gracefully. I also considered a semaphore-style channel, but a persistent worker pool wins on a high-RPS service: workers are reused rather than spawned and reaped per task, and the goroutine count stays predictable. The channel-close handles the queue side cleanly; however, parent-context propagation to in-flight DB calls is a known gap in MetricFlow (0.8% drain loss measured during pod kill, queued for follow-up).
+
+The key mental model shift for me from Java's thread pools was that the buffer size isn't primarily a performance tuning dial. It's a policy decision about how much work you are willing to hold before you start refusing requests. Channel depth is exposed as a Prometheus gauge (`ingest_queue_depth`), which means the policy is directly observable, not just implicit.
+
+_Trade-off:_ Three numbers are coupled together: buffer size, worker count, and DB pool size. Misalignment in any of those shifts the bottleneck to that layer, which is why measurement matters more than formulas.
+
+---
+
+### 4. Backpressure: 503 Load Shedding
+
+When the ingestion channel is full, MetricFlow returns `503 Service Unavailable` immediately, rather than blocking the caller or queuing indefinitely. This is a deliberate fast-fail design choice: blocking the HTTP handler would tie up a connection and push back-pressure upstream to the caller's connection pool, which in turn cascades in ways that become harder to observe and control than an explicit rejection. A 503 response is the honest signal here, as the service itself is at capacity and not the specific client. It's the correct status code for a load balancer or rate-limiter to act on. Each shed increments the `ingest_requests_shed_total` counter, so the back-pressure regime is fully observable rather than a silent failure mode.
+
+The k6 overload test validated the design choice. At 200 VUs, the shed counter ramped up in lockstep with channel saturation: 28,515 reported failures matched the 28,515 shed counter increments. Exact parity, confirming that the failures k6 saw were intentional rejections, not service failures. The deeper principle: under overload, fail-fast beats fail-slow. When MetricFlow shed 47.74% of requests at 200 VUs, the accepted requests stayed fast, and that is the value of fail-fast over queuing.
+
+_Trade-off:_ A 503 shed-and-retry model requires callers to implement their own retry logic with backoff. A blocking model, however, absorbs short bursts more transparently but hides capacity problems until they become real outages.
+
+---
+
+### 5. Connection Pool Sizing (Measured No-Op)
+
+`pgxpool` defaults to `max(4, runtime.NumCPU())` connections, which in this environment resolved to 11 max connections. The temptation under load testing is to crank it up, but the measurement told a different story.
+
+At 200 VUs sustained over the full ramp, peak pool acquisition was 5 out of 11 connections, with zero wait time recorded across the entirety of the test window. The pool was never, at any point, the bottleneck. The constraint was upstream — in the worker-pool-to-Postgres pipe — and amping up the pool size would have done nothing except increase Postgres-side connection overhead. The default sizing was sufficient for the workload.
+
+The main story here isn't the number itself, but the discipline. Pool sizing was instrumented before any tuning was attempted, so the decision to leave defaults in place was driven by the data rather than assumed. The Connection Pool Usage panel in Grafana made the no-op visible and defensible: under sustained load the panel clearly showed plenty of headroom and zero contention for connections, so there was nothing to tune.
+
+_Trade-off:_ The finding is workload-specific. A heavier read pattern, larger result sets, or a multi-instance deployment could change the calculus. The sizing principle, however, stays the same: measure first, then tune from observed wait time, not from formulas.
+
+---
+
+### 6. Container Image: Scratch
+
+The final container image is built `FROM scratch` — no base OS, no shell, no package manager. The Go binary is statically compiled (`CGO_ENABLED=0`) in a multi-stage build and copied directly into the scratch layer, along with the migrations directory. The final image size is 8.8 MB.
+
+This was a deliberate security and operations choice. A scratch image has the smallest possible attack surface: no shell for an attacker to exec into, no system libraries to exploit, and no package manager for vulnerabilities to surface. Distroless was the other candidate: Google's minimal images include `ca-certificates`, `tzdata`, and a few base libraries, and Google rebuilds them regularly so vuln fixes flow in via tag pulls. The catch with using scratch is that there is nothing to patch: security posture rests entirely on the binary and the explicit files copied in, which means it's also the responsibility of CI scanning to catch issues there.
+
+The operational tradeoff is real: there is no shell inside the container, so `kubectl exec` debugging requires either a sidecar or an ephemeral debug container. For MetricFlow specifically, that's an acceptable constraint, as Day 2 debugging mainly relies on Prometheus metrics, structured logs, and the pod-kill-tested graceful-shutdown path, not exec sessions. If the metrics and logs don't tell you what's wrong, the fix is to improve the instrumentation, not a shell.
+
+_Trade-off:_ Scratch makes interactive debugging impossible from inside the container; the mitigation is instrumentation-first observability, as stated above. For a Java or Python service that needs dynamic libraries at runtime, distroless would be the better call, but for MetricFlow, scratch does the job.
+
+---
+
+### 7. Secrets Handling
+
+In the current Minikube deployment, secrets are stored as Kubernetes Secrets and injected into the pod as environment variables. Here is the baseline pattern: Kubernetes Secrets are namespace-scoped, RBAC-controlled, and treated distinctly from ConfigMaps by audit tooling and secret-scanning systems (even though base64 is encoding, not encryption). The convention itself carries enough weight even when the cryptographic guarantees don't.
+
+The known limitation in MetricFlow's setup is exactly that: base64 is decodable by anyone with namespace read access, and at-rest encryption in `etcd` is opt-in on most clusters and not configured on Minikube. The production evolution layers on three things: encryption at rest in `etcd`, tighter RBAC limiting which service accounts can read which secrets, and an external secret manager (AWS Secrets Manager or HashiCorp Vault) accessed via the External Secrets Operator, which keeps plaintext secrets out of the cluster entirely and centralizes rotation.
+
+For MetricFlow in its current scope, the Kubernetes-native baseline is appropriate. MetricFlow documents this gap explicitly, so it's more a demonstrated awareness of the production roadmap than an oversight. In the upcoming EKS implementation, the upgrade path is ESO + AWS Secrets Manager.
+
+_Trade-off:_ Kubernetes-native secrets are operationally simple but require additional layers to meet production security standards in a real multi-team production environment.
+
+---
+
 ## Tech Stack
 
 - **Go 1.25** - service implementation
