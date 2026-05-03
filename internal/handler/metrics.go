@@ -3,6 +3,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -56,7 +57,11 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(met)
+	err = json.NewEncoder(w).Encode(met)
+
+	if err != nil {
+		slog.Error("Failed to encode metric response", "error", err)
+	}
 }
 
 // GetMetrics handles GET requests to query metrics with optional filters
@@ -102,5 +107,8 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(metrics)
+	err = json.NewEncoder(w).Encode(metrics)
+	if err != nil {
+		slog.Error("Failed to encode metrics response", "error", err)
+	}
 }

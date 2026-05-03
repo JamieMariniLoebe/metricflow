@@ -73,7 +73,11 @@ func main() {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		err = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+		if err != nil {
+			slog.Error("Failed to encode health response", "error", err)
+		}
 	})
 
 	r.Post("/api/metrics", h.CreateMetric)
@@ -83,8 +87,9 @@ func main() {
 	slog.Info("MetricFlow starting", "port", 8080)
 
 	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: r,
+		ReadHeaderTimeout: 10 * time.Second, // mitigates Slowloris (G112)
+		Addr:              ":8080",
+		Handler:           r,
 	}
 
 	go srv.ListenAndServe()
