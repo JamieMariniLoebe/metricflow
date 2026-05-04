@@ -70,7 +70,7 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	var filter models.MetricFilter
 	var err error
-	var metrics []models.Metric
+	var metrics = []models.Metric{}
 
 	if params.Get("metric_name") != "" {
 		filter.MetricName = params.Get("metric_name")
