@@ -19,4 +19,11 @@
 # Coverage reports
 coverage.out
 
+# Kubernetes secret w/ sensitive values
 k8s/metricflow-secret.yaml
+
+# Terraform working directory
+.terraform/
+
+# Terraform state files
+*.tfstate*
