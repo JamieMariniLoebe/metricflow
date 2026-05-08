@@ -15,9 +15,10 @@ import (
 type Metrics struct {
 	requestCounter          *prometheus.CounterVec
 	durationHistogram       *prometheus.HistogramVec
-	IngestedCounter         prometheus.Counter
+	QueuedCounter           prometheus.Counter
 	IngestQueueDepth        prometheus.Gauge
 	IngestRequestsShedTotal prometheus.Counter
+	PersistedCounter        prometheus.Counter
 }
 
 func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
@@ -37,10 +38,10 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 			},
 			[]string{"method", "path", "status"},
 		),
-		IngestedCounter: prometheus.NewCounter(
+		QueuedCounter: prometheus.NewCounter(
 			prometheus.CounterOpts{
-				Name: "metrics_ingested_total",
-				Help: "Total number of metrics ingested",
+				Name: "metrics_queued_total",
+				Help: "Total number of metrics queued",
 			},
 		),
 		IngestQueueDepth: prometheus.NewGauge(
@@ -55,8 +56,14 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 				Help: "Total number of requests shed",
 			},
 		),
+		PersistedCounter: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "metrics_persisted_total",
+				Help: "Total number of metrics persisted",
+			},
+		),
 	}
-	r.MustRegister(m.requestCounter, m.durationHistogram, m.IngestedCounter, m.IngestQueueDepth, m.IngestRequestsShedTotal)
+	r.MustRegister(m.requestCounter, m.durationHistogram, m.QueuedCounter, m.IngestQueueDepth, m.IngestRequestsShedTotal, m.PersistedCounter)
 
 	r.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{

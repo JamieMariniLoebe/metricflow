@@ -14,24 +14,26 @@ import (
 )
 
 type Ingester struct {
-	ingest        chan models.Metric
-	db            *store.Store
-	workers       int
-	wait          *sync.WaitGroup
-	ingestGauge   prometheus.Gauge
-	ingestCounter prometheus.Counter
+	ingest           chan models.Metric
+	db               *store.Store
+	workers          int
+	wait             *sync.WaitGroup
+	queueDepthGauge  prometheus.Gauge
+	shedCounter      prometheus.Counter
+	persistedCounter prometheus.Counter
 }
 
-func NewIngester(s *store.Store, w int, g prometheus.Gauge, c prometheus.Counter) *Ingester {
+func NewIngester(s *store.Store, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter) *Ingester {
 	i := make(chan models.Metric, w*5)
 
 	return &Ingester{
-		ingest:        i,
-		db:            s,
-		workers:       w,
-		wait:          &sync.WaitGroup{},
-		ingestGauge:   g,
-		ingestCounter: c,
+		ingest:           i,
+		db:               s,
+		workers:          w,
+		wait:             &sync.WaitGroup{},
+		queueDepthGauge:  queueDepthGauge,
+		shedCounter:      shedCounter,
+		persistedCounter: persistedCounter,
 	}
 }
 
@@ -42,9 +44,11 @@ func (ig *Ingester) Start() {
 				opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				if err := ig.db.InsertMetric(opCtx, item); err != nil {
 					slog.Error("Error processing metric insertion", "error", err, "metric_name", item.MetricName)
+				} else {
+					ig.persistedCounter.Inc()
 				}
 				cancel()
-				ig.ingestGauge.Dec()
+				ig.queueDepthGauge.Dec()
 			}
 		})
 	}
@@ -53,10 +57,10 @@ func (ig *Ingester) Start() {
 func (ig *Ingester) Submit(m models.Metric) error {
 	select {
 	case ig.ingest <- m:
-		ig.ingestGauge.Inc()
+		ig.queueDepthGauge.Inc()
 		return nil
 	default:
-		ig.ingestCounter.Inc()
+		ig.shedCounter.Inc()
 		return errors.New("channel full")
 	}
 }

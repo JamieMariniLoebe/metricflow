@@ -60,9 +60,9 @@ func main() {
 
 	s := store.NewStore(db)
 
-	i := ingest.NewIngester(s, 5, m.IngestQueueDepth, m.IngestRequestsShedTotal)
+	i := ingest.NewIngester(s, 5, m.IngestQueueDepth, m.IngestRequestsShedTotal, m.PersistedCounter)
 
-	h := handler.NewHandler(s, m.IngestedCounter, i)
+	h := handler.NewHandler(s, m.QueuedCounter, i)
 
 	i.Start()
 
@@ -74,9 +74,7 @@ func main() {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-
-		if err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			slog.Error("Failed to encode health response", "error", err)
 		}
 	})

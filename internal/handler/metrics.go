@@ -15,23 +15,24 @@ import (
 
 // Handler holds dependencies for HTTP request handlers
 type Handler struct {
-	store    *store.Store
-	ingest   prometheus.Counter
-	ingester *ingest.Ingester
+	store         *store.Store
+	queuedCounter prometheus.Counter
+	ingester      *ingest.Ingester
 }
 
 // NewHandler creates a Handler with the given store for database access
 func NewHandler(store *store.Store, ingest prometheus.Counter, ingester *ingest.Ingester) *Handler {
 	return &Handler{
-		store:    store,
-		ingest:   ingest,
-		ingester: ingester,
+		store:         store,
+		queuedCounter: ingest,
+		ingester:      ingester,
 	}
 }
 
 // CreateMetric handles POST requests to ingest a new metric data point
 func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
-	decode := json.NewDecoder(r.Body)
+	decode := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024))
+	decode.DisallowUnknownFields()
 	var met models.Metric
 
 	err := decode.Decode(&met)
@@ -53,7 +54,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.ingest.Inc()
+	h.queuedCounter.Inc()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
