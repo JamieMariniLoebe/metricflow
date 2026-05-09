@@ -13,12 +13,12 @@ import (
 )
 
 type Metrics struct {
-	requestCounter          *prometheus.CounterVec
-	durationHistogram       *prometheus.HistogramVec
-	QueuedCounter           prometheus.Counter
-	IngestQueueDepth        prometheus.Gauge
-	IngestRequestsShedTotal prometheus.Counter
-	PersistedCounter        prometheus.Counter
+	requestCounter    *prometheus.CounterVec
+	durationHistogram *prometheus.HistogramVec
+	QueuedCounter     prometheus.Counter
+	QueueDepthGauge   prometheus.Gauge
+	ShedCounter       prometheus.Counter
+	PersistedCounter  prometheus.Counter
 }
 
 func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
@@ -40,34 +40,34 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 		),
 		QueuedCounter: prometheus.NewCounter(
 			prometheus.CounterOpts{
-				Name: "metrics_queued_total",
+				Name: "metricflow_ingest_queued_total",
 				Help: "Total number of metrics queued",
 			},
 		),
-		IngestQueueDepth: prometheus.NewGauge(
+		QueueDepthGauge: prometheus.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "ingest_queue_depth",
+				Name: "metricflow_ingest_queue_depth",
 				Help: "Total number of items in channel",
 			},
 		),
-		IngestRequestsShedTotal: prometheus.NewCounter(
+		ShedCounter: prometheus.NewCounter(
 			prometheus.CounterOpts{
-				Name: "ingest_requests_shed_total",
+				Name: "metricflow_ingest_shed_total",
 				Help: "Total number of requests shed",
 			},
 		),
 		PersistedCounter: prometheus.NewCounter(
 			prometheus.CounterOpts{
-				Name: "metrics_persisted_total",
+				Name: "metricflow_ingest_persisted_total",
 				Help: "Total number of metrics persisted",
 			},
 		),
 	}
-	r.MustRegister(m.requestCounter, m.durationHistogram, m.QueuedCounter, m.IngestQueueDepth, m.IngestRequestsShedTotal, m.PersistedCounter)
+	r.MustRegister(m.requestCounter, m.durationHistogram, m.QueuedCounter, m.QueueDepthGauge, m.ShedCounter, m.PersistedCounter)
 
 	r.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name: "pgxpool_acquired_conns",
+			Name: "metricflow_pgxpool_acquired_connections",
 			Help: "Currently acquired connections",
 		},
 		func() float64 {
@@ -77,7 +77,7 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 
 	r.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name: "pgxpool_idle_conns",
+			Name: "metricflow_pgxpool_idle_connections",
 			Help: "Currently idle connections",
 		},
 		func() float64 {
@@ -87,7 +87,7 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 
 	r.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name: "pgxpool_max_conns",
+			Name: "metricflow_pgxpool_max_connections",
 			Help: "Current maximum connections",
 		},
 		func() float64 {
@@ -95,9 +95,9 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 		},
 	))
 
-	r.MustRegister(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Name: "pgxpool_acquire_wait_seconds",
+	r.MustRegister(prometheus.NewCounterFunc(
+		prometheus.CounterOpts{
+			Name: "metricflow_pgxpool_acquire_wait_seconds_total",
 			Help: "Total time spent waiting due to pool being empty",
 		},
 		func() float64 {
@@ -105,9 +105,9 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 		},
 	))
 
-	r.MustRegister(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Name: "pgxpool_acquire_duration_seconds",
+	r.MustRegister(prometheus.NewCounterFunc(
+		prometheus.CounterOpts{
+			Name: "metricflow_pgxpool_acquire_duration_seconds_total",
 			Help: "Total time spent acquiring",
 		},
 		func() float64 {
