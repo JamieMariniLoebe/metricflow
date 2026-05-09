@@ -106,22 +106,24 @@ docker compose down -v
 
 Load testing was run with k6 to verify the service's backpressure and graceful degradation behavior under sustained overload. The test ramps through three 2-minute plateaus - 10 VUs (baseline), 50 VUs (medium), and 200 VUs (overload) - with each VU firing one request every 500ms. Entire test was run against MetricFlow in Docker Compose on an M-series MacBook Pro, single-host, single-instance.
 
-![MetricFlow dashboard during load test](docs/dashboard.png)
+![MetricFlow dashboard — request rate, latency, errors, queue, shedding](docs/dashboard-overview.png)
+![Connection Pool Usage panel under sustained load](docs/dashboard-connection-pool.png)
 
-| Load Stage | Offered Load | Accepted (202) | Shed Rate |     p50 |     p95 |     p99 |
-| ---------- | -----------: | -------------: | --------: | ------: | ------: | ------: |
-| Baseline   |       10 VUs |      ~20 req/s |        0% | 0.25 ms | 0.48 ms | 0.71 ms |
-| Medium     |       50 VUs |     ~100 req/s |        0% | 0.26 ms | 0.48 ms | 0.93 ms |
-| Overload   |      200 VUs |     ~200 req/s |       52% | 0.78 ms | 3.62 ms | 4.72 ms |
+| Load Stage | Offered Load | Accepted (202) |         Shed Rate |    p50 |    p95 |     p99 |
+| ---------- | -----------: | -------------: | ----------------: | -----: | -----: | ------: |
+| Baseline   |       10 VUs |       20 req/s |                0% | 259 µs | 493 µs | 3.05 ms |
+| Medium     |       50 VUs |     99.2 req/s |                0% | 259 µs | 492 µs | 1.47 ms |
+| Overload   |      200 VUs |  252–262 req/s | ~40% peak / 26.6% | 255 µs | 484 µs |  940 µs |
 
-The shed counter incremented in exact parity with k6's failed request count, as every 503 returned to the client corresponded to a counter increment on the server. This correlation confirms
-the failures were intentional shedding rather than timeouts, connection errors, or resource exhaustion. More importantly, it validates the instrumentation itself: The metric doesn't undercount or overcount, so operational dashboards can be trusted during real incidents.
+The k6 run produced 77,276 total requests, of which 56,715 returned 202 and 20,561 returned 503. Server-side counters matched exactly: queued = 56,715, persisted = 56,715, shed = 20,561. Three-way parity across the full handler -> worker -> DB path validates not just the rejection path but the entire pipeline. Zero drain loss, zero drift between layers, and zero requests unaccounted for. The instrumentation can be trusted during real incidents.
 
-Through the baseline and medium load stages, request latency stays essentially flat with p95 sitting at 0.48 ms in both stages, despite a fivefold increase in offered load. Only at the overload stage does latency climb, and even then it only rises modestly to a p95 of 3.62 ms under active shedding. This is the point at which the capacity ceiling is clearly evident: rather than attempting to process every request that comes in and letting queues build, the system rejects what it realistically can't handle, and preserves low latency for accepted traffic. The alternative, unbounded queuing, would produce the gradual slowdown, timeout cascades and unpredictable tail latency that backpressure exists to prevent.
+The p50 and p95 numbers are the real headline finding: server-side latency held essentially constant across a 20x load increase, validating the core backpressure premise. The p99 column required careful reading, however. The 3.05 ms baseline reading reflects the canonical pool-warmup spike documented across virtually every connection-pooled service: pgxpool lazily creates connections on first acquire, and the small baseline sample (~3k requests) was dominated by those early outliers. By overload (~30,000 samples), the pool is fully warm and the p99 reflects true steady-state tail behavior at 940 µs. The capacity ceiling is enforced cleanly: rather than allowing queues to build, the system rejects what it can't handle, preserving low latency for accepted traffic. The alternative (unbounded queuing) produces the gradual slowdown, timeout cascades and unpredictable tail latency that backpressure exists to prevent.
 
-The handler does very little synchronously - its main work is validating and handing off requests downstream. The heavy lifting of system performance lives downstream in the worker-to-Postgres path. In the same vein, queue depth as observed in Prometheus stayed near zero throughout the test. The channel does fill transiently whenever shedding occurs (that's the mechanical precondition for a shed event), but workers drain it fast enough that the 5-second scrape samples rarely caught a filled state.
+The handler does very little synchronously - its main work is validating and handing off requests downstream. The heavy lifting of system performance lives downstream in the worker-to-Postgres path. In the same vein, queue depth as observed in Prometheus stayed at zero for almost the entire test, with a single transient spike recorded to 30 captured during the overload phase. The channel fills transiently whenever shedding occurs (the mechanical precondition for a shed event), but workers drain it fast enough that the 5-second scrape sampled rarely even catch a filled state. The visible spike is the exception that proves the rule.
 
-Implementing load shedding in this design comes at the cost of accepted throughput: under heavy load, the system rejected ~52% of requests. The tradeoff is this system has more predictable latency, cleaner failure signals, and protection from cascading failures. In a domain such as metrics ingestion, where clients have their own retry options, shedding is cheaper than the alternatives of chronic system failures and unpredictable latency.
+Implementing load shedding in this design comes at the cost of accepted throughput: under sustained 200 VU overload, the system rejected ~40% of incoming requests at peak (peaking at ~150 shed/sec, range 133–158), settling around 26.6% across the full 8-minute test. The benefit is a system with more predictable latency, cleaner failure signals, and protection from cascading failures. In a domain such as metrics ingestion, where clients can have their own retry options, shedding is cheaper than the alternatives of chronic system failures and unpredictable latency.
+
+**Note on latency measurement:** server-side numbers above are MetricFlow's internal histogram (`http_request_duration_seconds`). k6's client-side p95 was 11.69 ms, reflecting added network and Docker bridge overhead in this single-host setup. The 25× gap between the two is the local loopback round-trip, not service work.
 
 ---
 
@@ -131,11 +133,18 @@ MetricFlow exposes the following metrics at `/metrics`:
 
 - `http_requests_total` - counter, labeled by method, path, status
 - `http_request_duration_seconds` - histogram, labeled by method, path, status
-- `metrics_ingested_total` - counter of successfully queued metrics
-- `ingest_queue_depth` - gauge of current channel occupancy
-- `ingest_requests_shed_total` - counter of 503s returned due to full channel
+- `metricflow_ingest_queued_total` - counter of metrics accepted into the queue (handler side)
+- `metricflow_ingest_queue_depth` - gauge of current channel occupancy
+- `metricflow_ingest_shed_total` - counter of 503s returned due to full channel
+- `metricflow_ingest_persisted_total` - counter of metrics successfully written to Postgres (worker side)
+- `metricflow_pgxpool_acquired_connections` - gauge of currently in-use pool connections
+- `metricflow_pgxpool_idle_connections` - gauge of currently idle pool connections
+- `metricflow_pgxpool_max_connections` - gauge of configured pool ceiling
+- `metricflow_pgxpool_acquire_wait_seconds_total` - counter of cumulative time spent waiting on an empty pool
+- `metricflow_pgxpool_acquire_duration_seconds_total` - counter of cumulative time spent acquiring a connection
 
-The provisioned Grafana dashboard shows five panels: request rate by status, latency percentiles (p50/p95/p99), 5xx error rate, queue depth with capacity threshold, and shed rate. Together they tell the complete backpressure story --> offered load on the left, accepted vs shed in the middle, and internal queue state on the bottom.
+The provisioned Grafana dashboard shows six panels: request rate by status, latency percentiles (p50/p95/p99), 5xx error rate, queue depth with capacity threshold, shed rate, and connection pool usage (acquired/idle/max).
+Together they tell the complete backpressure story --> offered load on the left, accepted vs shed in the middle, and internal queue state on the bottom.
 
 ---
 
@@ -167,7 +176,7 @@ The ingestion pipeline uses a bounded buffered channel as the work queue with a 
 
 The alternative — spawning a new goroutine for each request — is the easiest Go concurrency pattern, but it gives up all control over resource consumption. Unbounded goroutine counts under sustained load ultimately lead to memory growth, scheduler pressure, and exhausted database connections, with no clean way to shed load gracefully. I also considered a semaphore-style channel, but a persistent worker pool wins on a high-RPS service: workers are reused rather than spawned and reaped per task, and the goroutine count stays predictable. The channel-close handles the queue side cleanly; however, parent-context propagation to in-flight DB calls is a known gap in MetricFlow (0.8% drain loss measured during pod kill, queued for follow-up).
 
-The key mental model shift for me from Java's thread pools was that the buffer size isn't primarily a performance tuning dial. It's a policy decision about how much work you are willing to hold before you start refusing requests. Channel depth is exposed as a Prometheus gauge (`ingest_queue_depth`), which means the policy is directly observable, not just implicit.
+The key mental model shift for me from Java's thread pools was that the buffer size isn't primarily a performance tuning dial. It's a policy decision about how much work you are willing to hold before you start refusing requests. Channel depth is exposed as a Prometheus gauge (`metricflow_ingest_queue_depth`), which means the policy is directly observable, not just implicit.
 
 _Trade-off:_ Three numbers are coupled together: buffer size, worker count, and DB pool size. Misalignment in any of those shifts the bottleneck to that layer, which is why measurement matters more than formulas.
 
@@ -175,9 +184,10 @@ _Trade-off:_ Three numbers are coupled together: buffer size, worker count, and 
 
 ### 4. Backpressure: 503 Load Shedding
 
-When the ingestion channel is full, MetricFlow returns `503 Service Unavailable` immediately, rather than blocking the caller or queuing indefinitely. This is a deliberate fast-fail design choice: blocking the HTTP handler would tie up a connection and push back-pressure upstream to the caller's connection pool, which in turn cascades in ways that become harder to observe and control than an explicit rejection. A 503 response is the honest signal here, as the service itself is at capacity and not the specific client. It's the correct status code for a load balancer or rate-limiter to act on. Each shed increments the `ingest_requests_shed_total` counter, so the back-pressure regime is fully observable rather than a silent failure mode.
+When the ingestion channel is full, MetricFlow returns `503 Service Unavailable` immediately, rather than blocking the caller or queuing indefinitely. This is a deliberate fast-fail design choice: blocking the HTTP handler would tie up a connection and push back-pressure upstream to the caller's connection pool, which in turn cascades in ways that become harder to observe and control than an explicit rejection. A 503 response is the honest signal here, as the service itself is at capacity and not the specific client. It's the correct status code for a load balancer or rate-limiter to act on. Each shed increments the `metricflow_ingest_shed_total` counter, so the back-pressure regime is fully observable rather than a silent failure mode.
 
-The k6 overload test validated the design choice. At 200 VUs, the shed counter ramped up in lockstep with channel saturation: 28,515 reported failures matched the 28,515 shed counter increments. Exact parity, confirming that the failures k6 saw were intentional rejections, not service failures. The deeper principle: under overload, fail-fast beats fail-slow. When MetricFlow shed 47.74% of requests at 200 VUs, the accepted requests stayed fast, and that is the value of fail-fast over queuing.
+The k6 overload test validated the design choice. Across an 8-minute run, k6 reported 20,561 failures and the shed counter incremented to exactly 20,561 — and the queued counter (56,715) matched the worker-side persisted counter (56,715), confirming three-way parity across the entire pipeline. Failures were intentional rejections, not service errors, and accepted traffic landed in Postgres without loss. The deeper principle: under overload, fail-fast beats fail-slow. With ~40% of requests shed at peak (133–158 shed/sec sustained over
+the 200 VU plateau), accepted traffic stayed at ~484 µs p95 throughout.
 
 _Trade-off:_ A 503 shed-and-retry model requires callers to implement their own retry logic with backoff. A blocking model, however, absorbs short bursts more transparently but hides capacity problems until they become real outages.
 
@@ -189,7 +199,7 @@ _Trade-off:_ A 503 shed-and-retry model requires callers to implement their own 
 
 At 200 VUs sustained over the full ramp, peak pool acquisition was 5 out of 11 connections, with zero wait time recorded across the entirety of the test window. The pool was never, at any point, the bottleneck. The constraint was upstream — in the worker-pool-to-Postgres pipe — and amping up the pool size would have done nothing except increase Postgres-side connection overhead. The default sizing was sufficient for the workload.
 
-The main story here isn't the number itself, but the discipline. Pool sizing was instrumented before any tuning was attempted, so the decision to leave defaults in place was driven by the data rather than assumed. The Connection Pool Usage panel in Grafana made the no-op visible and defensible: under sustained load the panel clearly showed plenty of headroom and zero contention for connections, so there was nothing to tune.
+The Connection Pool Usage panel above tells the story directly: idle connections ramp from 0 to 5 during the baseline plateau as the pool warms, then hold steady at 5 through the medium and overload stages. Acquired connections stay at zero almost the entire test, with brief peaks to 5 during overload — the pool's 11-connection ceiling was never approached. The constraint sat upstream in the worker-pool-to-Postgres pipe, not at the pool itself. The discipline matters more than the number: pool sizing was instrumented before any tuning was attempted, so leaving defaults in place was driven by the data rather than assumed.
 
 _Trade-off:_ The finding is workload-specific. A heavier read pattern, larger result sets, or a multi-instance deployment could change the calculus. The sizing principle, however, stays the same: measure first, then tune from observed wait time, not from formulas.
 
@@ -237,9 +247,10 @@ _Trade-off:_ Kubernetes-native secrets are operationally simple but require addi
 
 ## Known Limitations and Future Work
 
-- **Connection pool stats not exposed as metrics.** Pool acquisition time, idle/acquired connection counts not yet instrumented. Planned for later implementation along with other fixes.
+- **No automated test suite.** Zero \*\_test.go files. Unit tests for handler and ingester paths plus an integration test against a real Postgres instance are scheduled for Phase 3.
+- **Worker context propagation incomplete.** Worker goroutines use context.Background() for DB inserts rather than inheriting from a parent shutdown context. Measured impact: 0.8% drain loss during pod-kill exercises. Fix involves passing a parent ctx through Ingester.Start and deriving the per-op timeout from it.
+- **Single-replica deployment, no HPA.** Current manifests run one MetricFlow pod with no HorizontalPodAutoscaler or PodDisruptionBudget configured. Multi-replica + HPA pending Phase 2B / EKS migration.
+- **Database schema is permissive.** `metric_name`, `metric_type`, and `measured_at` are nullable in Postgres; defense-in-depth NOT NULL constraints pending. No index on (`metric_name`, `measured_at`), so GET queries will degrade as the metrics table grows.
+- **Validation is field-level only.** Required-field checks, body size cap, and unknown-field rejection are in place. Label cardinality limits, metric-name regex, and timestamp sanity checks deferred to Phase 3.
 - **Request IDs not propagated through slog.** Structured logs lack request correlation. Adding middleware to inject request IDs into context and log attributes is a fix planned for future date.
-- **Single-instance deployment only.** K8s manifests and horizontal scaling planned for Phase 2B (Minikube → EKS).
-- **No authentication or rate limiting.** Personal project scope - production deployment would require both (This project aims for close to production-level with given constraints)
-- **Validation is minimal.** Required-field checks only. Label cardinality limits, metric name regex validation, and timestamp sanity checks deferred to later date.
-- **pgx pool uses defaults.** `MaxConns` defaults to `max(4, NumCPU())`. Tuning based on observed bottleneck pending instrumentation above.
+- **No authentication or rate limiting.** Out of scope for this iteration; production deployment behind a gateway/sidecar is the assumed end state.
