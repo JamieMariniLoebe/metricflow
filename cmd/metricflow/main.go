@@ -107,7 +107,7 @@ func main() {
 		slog.Error("HTTP server shutdown failed", "error", err)
 	}
 
-	i.Shutdown()
+	i.Shutdown(shutdownCtx)
 
 	slog.Info("Shutdown....", "reason", context.Cause(ctx))
 
