@@ -30,6 +30,22 @@ module "eks" {
     }
   }
 
+  access_entries = {
+    github_actions = {
+      principal_arn = aws_iam_role.github_actions.arn
+
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
+          access_scope = {
+            type       = "namespace"
+            namespaces = ["default"]
+          }
+        }
+      }
+    }
+  }
+
   tags = {
     Terraform   = "true"
     Project     = "metricflow"

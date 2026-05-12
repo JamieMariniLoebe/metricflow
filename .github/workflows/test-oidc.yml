@@ -1,0 +1,20 @@
+name: Test OIDC
+
+on:
+    workflow_dispatch: 
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: arn:aws:iam::333207082767:role/github-actions-metricflow
+                aws-region: us-east-2
+
+            - name: Verify identity
+              run: aws sts get-caller-identity
