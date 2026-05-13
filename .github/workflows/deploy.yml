@@ -52,6 +52,7 @@ jobs:
                 exit-code: '1'
                 format: 'sarif'
                 output: 'trivy-results.sarif'
+                limit-severities-for-sarif: true
                 skip-setup-trivy: true
 
             - name: Upload SARIF
