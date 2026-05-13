@@ -1,0 +1,64 @@
+name: Deploy Application
+
+on:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: read
+    id-token: write
+    security-events: write
+
+env:
+    AWS_REGION: us-east-2
+
+jobs: 
+    build-scan-push:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: arn:aws:iam::333207082767:role/github-actions-metricflow
+                aws-region: ${{ env.AWS_REGION }}
+
+            - name: Login to ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2
+
+            - name: Build Docker image
+              run: |
+                IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/metricflow:${{ github.sha }}"
+                docker build -t "$IMAGE_URI" .
+                echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+              
+            - name: "Trivy Scan: report LOW/MEDIUM"
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                image-ref: ${{ env.IMAGE_URI }}
+                severity: 'LOW,MEDIUM'
+                exit-code: '0'
+                format: 'table'
+
+            - name: "Trivy scan: report HIGH/CRITICAL"
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                image-ref: ${{ env.IMAGE_URI }}
+                severity: 'HIGH,CRITICAL'
+                exit-code: '1'
+                format: 'sarif'
+                output: 'trivy-results.sarif'
+                skip-setup-trivy: true
+
+            - name: Upload SARIF
+              if: always()
+              uses: github/codeql-action/upload-sarif@v3
+              with:
+                sarif_file: 'trivy-results.sarif'
+
+            - name: Push image to ECR
+              run: docker push "$IMAGE_URI"
