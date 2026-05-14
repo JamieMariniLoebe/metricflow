@@ -94,6 +94,6 @@ spec:
         volumeMounts:
           - name: tmp
             mountPath: /tmp
-        volumes:
-          - name: tmp
-            emptyDir: {}
+      volumes:
+        - name: tmp
+          emptyDir: {}
