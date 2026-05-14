@@ -43,11 +43,7 @@ spec:
         volumeMounts:
         - name: pgdata
           mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-  - metadata:
-      name: pgdata
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi
+      volumes:
+        - name: pgdata
+          emptyDir: {}
+          # TEMPORARY: emptyDir bridge until RDS implementation

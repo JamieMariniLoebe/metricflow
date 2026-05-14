@@ -79,6 +79,19 @@ func main() {
 		}
 	})
 
+	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := db.Ping(ctx); err != nil {
+			slog.Error("Readiness check failed", "error", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
 	r.Post("/api/metrics", h.CreateMetric)
 
 	r.Get("/api/metrics", h.GetMetrics)
