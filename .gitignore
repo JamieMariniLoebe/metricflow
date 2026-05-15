@@ -12,9 +12,10 @@
 # OS files
 .DS_Store
 
-# IDE
+# IDE/tool configs
 .idea/
 .vscode/
+.claude/
 
 # Coverage reports
 coverage.out

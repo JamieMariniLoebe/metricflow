@@ -106,8 +106,8 @@ docker compose down -v
 
 Load testing was run with k6 to verify the service's backpressure and graceful degradation behavior under sustained overload. The test ramps through three 2-minute plateaus - 10 VUs (baseline), 50 VUs (medium), and 200 VUs (overload) - with each VU firing one request every 500ms. Entire test was run against MetricFlow in Docker Compose on an M-series MacBook Pro, single-host, single-instance.
 
-![MetricFlow dashboard — request rate, latency, errors, queue, shedding](docs/dashboard-overview.png)
-![Connection Pool Usage panel under sustained load](docs/dashboard-connection-pool.png)
+![MetricFlow dashboard — request rate, latency, errors, queue, shedding](docs/load-testing-dashboard.png)
+![Connection Pool Usage panel under sustained load](docs/load-testing-connection-pool.png)
 
 | Load Stage | Offered Load | Accepted (202) |         Shed Rate |    p50 |    p95 |     p99 |
 | ---------- | -----------: | -------------: | ----------------: | -----: | -----: | ------: |
@@ -126,6 +126,43 @@ Implementing load shedding in this design comes at the cost of accepted throughp
 **Note on latency measurement:** server-side numbers above are MetricFlow's internal histogram (`http_request_duration_seconds`). k6's client-side p95 was 11.69 ms, reflecting added network and Docker bridge overhead in this single-host setup. The 25× gap between the two is the local loopback round-trip, not service work.
 
 ---
+
+## Day 2 Operations
+
+**Test:** k6 load-test.js, 8 min, 10 → 50 → 200 VU ramp
+
+### #1: Pod Kill Mid-Request
+
+![Dashboard panel during load testing w/ pod kill](docs/day2-ops1.png)
+
+After a clean baseline, the pod was killed at the 2-minute mark. The Request Rate panel stops updating during the outage (Prometheus has no scrape target), so no new data points land. Restarting the port-forward restored client traffic to the new pod, and the request rate climbed back through 100 and into the 200 VU plateau. As the channel buffer saturated under sustained load, MetricFlow began returning 503s rather than queueing indefinitely; the Shed Counter ramps in lockstep, confirming the load-shedding design engaging as intended.
+
+When the only MetricFlow pod was deleted, k6 logged hundreds of `connection refused` failures. The Error Rate panel showed nothing. This was expected, and it points at a real observability principle.
+
+Prometheus uses a pull model: it scrapes the app's `/metrics` endpoint every few seconds and reads the counter values. The `http_requests_total` counter only increments when a request reaches the application middleware. During the outage, no requests reached the app — the TCP connection was refused at the kernel before any HTTP layer ran. Thus the counter never moved, so there was nothing for the panel to display.
+
+This is the core blind spot of application-level metrics: they cannot see outages where the application itself is gone. Production observability covers this gap with external vantage points — black-box probes, load balancer metrics, synthetic monitoring — that measure availability from outside the service. MetricFlow's current dashboard is intentionally inside-out; a follow-up would add a blackbox_exporter probe to close the loop.
+
+Compared k6's reported successful 202 count against Postgres row count for the test window:
+
+- **k6 202 responses** (test window 18:07–18:15 UTC): 48,316
+- **Postgres rows in same window:** 47,935
+- **Delta:** 381 rows lost (~0.8%)
+
+Graceful shutdown drained ~99.2% of in-flight requests cleanly under load. The 0.8% delta represents the edge case where requests were either mid-INSERT when worker timeout fired, or in the gap between handler-accept and channel-receive when SIGTERM arrived.
+
+### #2: Memory Pressure Analysis
+
+![Request rate, latency, queue depth under tight memory limits](docs/day2-ops2-dashboard.png)
+![Connection pool usage during memory pressure runs](docs/day2-ops2-conn-pool.png)
+
+Three subsequent load-test runs at progressively tighter limits (50Mi+small payloads-->32Mi+small payloads-->32Mi+fat 2KB payloads). Each run ran ~77k requests, and three-way counter parity was maintained throughout all 3 runs. The initial expectation on these runs was for at least one OOMKilled, especially on the final fat-payload run with memory limit reduced to 32Mi.
+
+However, OOM was never reached at any point during the 3 tests, disproving the expectation of at least one occurring. The service maintained a steady state at each ramp up, from baseline to overload.
+
+The architecture itself prevents load-driven OOM, by design. In MetricFlow, the handler hands off payloads to the channel asynchronously, effectively capping per-request retention. The handler itself returns immediately, and the Go GC reclaims the struct. Worker pools are bounded, which caps concurrent processing to 5 items max. The channel itself is fixed length, and added backpressure shedding caps the queue depth to 25 items waiting to be processed. This design prevents load-driven OOM from ever occurring, as the application can hold at most 30 items at any moment, period. With ~2KB per fat payload x 30 in-flight items = ~60KB of retained payload data. Against a 32Mi memory limit, that's about <0.2% of headroom consumed.
+
+Production-level Go OOMs are predominantly leak-driven, not necessarily load-driven. Both Datadog and Grafana document the dominant patterns: unbounded caches, leaked goroutines, defer-in-loops, etc. All of these produce gradual heap growth until the container limit triggers the OOMKiller. MetricFlow's bounded channel + fixed worker pool prevents the load-driven pattern; the leak-driven path is the residual risk which remains to be tested and accounted for in a future update. Detecting one in production would require watching `go_goroutines` climb over hours or even days, then using pprof to find the goroutines that aren't exiting. A soak test with leak injection is queued for an upcoming update.
 
 ## Observability
 
