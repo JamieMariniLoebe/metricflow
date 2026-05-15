@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 type Metrics struct {
@@ -114,6 +115,10 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 			return pool.Stat().AcquireDuration().Seconds()
 		},
 	))
+
+	r.MustRegister(collectors.NewGoCollector())
+
+	r.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	return m
 }
