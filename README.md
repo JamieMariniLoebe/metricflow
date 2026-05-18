@@ -149,7 +149,7 @@ Compared k6's reported successful 202 count against Postgres row count for the t
 - **Postgres rows in same window:** 47,935
 - **Delta:** 381 rows lost (~0.8%)
 
-Graceful shutdown drained ~99.2% of in-flight requests cleanly under load. The 0.8% delta represents the edge case where requests were either mid-INSERT when worker timeout fired, or in the gap between handler-accept and channel-receive when SIGTERM arrived.
+Graceful shutdown drained ~99.2% of in-flight requests cleanly under load. The 0.8% delta represents the edge case where requests were either mid-INSERT when worker timeout fired, or in the gap between handler-accept and channel-receive when SIGTERM arrived. The propagation gap has since been closed; re-verification is queued as a follow-up.
 
 ### #2: Memory Pressure Analysis
 
@@ -211,7 +211,7 @@ _Trade-off:_ `pgx` does, however, require writing SQL by hand and handling pgx-s
 
 The ingestion pipeline uses a bounded buffered channel as the work queue with a fixed-size goroutine pool draining it. Buffer size is 25; worker count is 5. I chose this pattern because it makes backpressure explicit and measurable: the channel has a defined capacity, and a non-blocking send onto a full channel is the load-shedding signal.
 
-The alternative — spawning a new goroutine for each request — is the easiest Go concurrency pattern, but it gives up all control over resource consumption. Unbounded goroutine counts under sustained load ultimately lead to memory growth, scheduler pressure, and exhausted database connections, with no clean way to shed load gracefully. I also considered a semaphore-style channel, but a persistent worker pool wins on a high-RPS service: workers are reused rather than spawned and reaped per task, and the goroutine count stays predictable. The channel-close handles the queue side cleanly; however, parent-context propagation to in-flight DB calls is a known gap in MetricFlow (0.8% drain loss measured during pod kill, queued for follow-up).
+The alternative — spawning a new goroutine for each request — is the easiest Go concurrency pattern, but it gives up all control over resource consumption. Unbounded goroutine counts under sustained load ultimately lead to memory growth, scheduler pressure, and exhausted database connections, with no clean way to shed load gracefully. I also considered a semaphore-style channel, but a persistent worker pool wins on a high-RPS service: workers are reused rather than spawned and reaped per task, and the goroutine count stays predictable. The channel-close handles the queue side cleanly; however, parent-context propagation to in-flight DB calls was a known gap in MetricFlow at the time of this test. 0.8% drain loss was measured during the pod-kill exercise. The propagation gap has since been closed, and re-verification on the new code path is queued as a follow-up exercise.
 
 The key mental model shift for me from Java's thread pools was that the buffer size isn't primarily a performance tuning dial. It's a policy decision about how much work you are willing to hold before you start refusing requests. Channel depth is exposed as a Prometheus gauge (`metricflow_ingest_queue_depth`), which means the policy is directly observable, not just implicit.
 
@@ -285,7 +285,6 @@ _Trade-off:_ Kubernetes-native secrets are operationally simple but require addi
 ## Known Limitations and Future Work
 
 - **No automated test suite.** Zero \*\_test.go files. Unit tests for handler and ingester paths plus an integration test against a real Postgres instance are scheduled for Phase 3.
-- **Worker context propagation incomplete.** Worker goroutines use context.Background() for DB inserts rather than inheriting from a parent shutdown context. Measured impact: 0.8% drain loss during pod-kill exercises. Fix involves passing a parent ctx through Ingester.Start and deriving the per-op timeout from it.
 - **Single-replica deployment, no HPA.** Current manifests run one MetricFlow pod with no HorizontalPodAutoscaler or PodDisruptionBudget configured. Multi-replica + HPA pending Phase 2B / EKS migration.
 - **Database schema is permissive.** `metric_name`, `metric_type`, and `measured_at` are nullable in Postgres; defense-in-depth NOT NULL constraints pending. No index on (`metric_name`, `measured_at`), so GET queries will degrade as the metrics table grows.
 - **Validation is field-level only.** Required-field checks, body size cap, and unknown-field rejection are in place. Label cardinality limits, metric-name regex, and timestamp sanity checks deferred to Phase 3.

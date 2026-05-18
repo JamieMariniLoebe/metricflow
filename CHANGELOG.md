@@ -35,10 +35,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Data race in `/health` handler where the outer-scope `err` variable was written by concurrent request goroutines
 - docker-compose Grafana provisioning mount pointed at non-existent `./grafana/provisioning`; now correctly points at `./k8s/grafana`
+- Worker goroutines were using `context.Background()`; now inherit context from a per-ingester `context.WithCancel`, and `Shutdown` propagates cancel to in-flight operations
 
 ### Known Limitations
 
-- Workers use `context.Background()` instead of inheriting parent context; 0.8% drain loss observed during pod kill
 - Request IDs not propagated through `slog`
 - Single-replica deployment with no HorizontalPodAutoscaler or PodDisruptionBudget; multi-replica + HPA pending Phase 2B / EKS migration
 - No automated test suite; unit + integration tests scheduled for Phase 3
