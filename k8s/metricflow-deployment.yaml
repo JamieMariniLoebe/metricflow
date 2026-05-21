@@ -54,8 +54,6 @@ spec:
               configMapKeyRef:
                 name: metricflow-config
                 key: SOURCE_URL
-          - name: DATABASE_URL
-            value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
         livenessProbe: 
           httpGet: 
             path: /health

@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/component: api
 data:
   DB_NAME: metricflow
-  DB_HOST: postgres
+  DB_HOST: metricflow.croiu2sq404t.us-east-2.rds.amazonaws.com
   DB_PORT: "5432"
   SOURCE_URL: file:///migrations
