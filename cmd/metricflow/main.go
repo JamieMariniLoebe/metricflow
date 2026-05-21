@@ -67,7 +67,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	sqlDB.Close()
+	if err := sqlDB.Close(); err != nil {
+		slog.Warn("failed to close migration db", "error", err)
+	}
 
 	db, err := store.NewPool(cfg)
 	if err != nil {
