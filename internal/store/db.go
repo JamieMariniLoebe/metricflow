@@ -8,9 +8,9 @@ import (
 )
 
 // NewPool creates a new PostgreSQL connection pool
-func NewPool(databaseURL string) (*pgxpool.Pool, error) {
+func NewPool(cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 
-	db, err := pgxpool.New(context.Background(), databaseURL)
+	db, err := pgxpool.NewWithConfig(context.Background(), cfg)
 
 	if err != nil {
 		return nil, err

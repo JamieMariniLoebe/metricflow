@@ -2,18 +2,23 @@
 package database
 
 import (
+	"database/sql"
 	"errors"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	pgxv5 "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 // RunMigrations applies any pending new database schema changes
-func RunMigrations(databaseURL string, sourceURL string) error {
+func RunMigrations(db *sql.DB, sourceURL string) error {
 
-	m, err := migrate.New(sourceURL, databaseURL)
+	driver, err := pgxv5.WithInstance(db, &pgxv5.Config{})
+	if err != nil {
+		return err
+	}
 
+	m, err := migrate.NewWithDatabaseInstance(sourceURL, "pgx5", driver)
 	if err != nil {
 		return err
 	}

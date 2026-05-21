@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -18,39 +18,65 @@ import (
 	"github.com/JamieMariniLoebe/metricflow/internal/metrics"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
-	dbURL := os.Getenv("DATABASE_URL")
+
 	sourceURL := os.Getenv("SOURCE_URL")
-
-	if dbURL == "" {
-		slog.Error("Empty database_url")
-		os.Exit(1)
-	}
-
 	if sourceURL == "" {
 		slog.Error("Empty source_url")
 		os.Exit(1)
 	}
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	host := os.Getenv("DB_HOST")
+	if host == "" {
+		slog.Error("Empty host var")
+		os.Exit(1)
+	}
+	port := os.Getenv("DB_PORT")
+	if port == "" {
+		slog.Error("Empty port var")
+		os.Exit(1)
+	}
+	name := os.Getenv("DB_NAME")
+	if name == "" {
+		slog.Error("Empty name var")
+		os.Exit(1)
+	}
 
-	pgxURL := strings.Replace(dbURL, "postgres://", "pgx5://", 1)
+	url := fmt.Sprintf("postgres://%s:%s/%s?sslmode=require", host, port, name)
 
-	if err := database.RunMigrations(pgxURL, sourceURL); err != nil {
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		slog.Error("Failed to parse db config", "error", err)
+		os.Exit(1)
+	}
+
+	cfg.ConnConfig.User = user
+	cfg.ConnConfig.Password = password
+
+	sqlDB := stdlib.OpenDB(*cfg.ConnConfig)
+
+	if err := database.RunMigrations(sqlDB, sourceURL); err != nil {
 		slog.Error("migration failed", "error", err)
 		os.Exit(1)
 	}
 
-	db, err := store.NewPool(dbURL)
+	sqlDB.Close()
 
+	db, err := store.NewPool(cfg)
 	if err != nil {
 		slog.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
 
 	defer db.Close()
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
