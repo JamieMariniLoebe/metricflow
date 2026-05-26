@@ -256,15 +256,13 @@ _Trade-off:_ Scratch makes interactive debugging impossible from inside the cont
 
 ### 7. Secrets Handling
 
-In the original Minikube deployment, secrets were stored as Kubernetes Secrets and injected into the pod as environment variables. Here was the baseline pattern: Kubernetes Secrets are namespace-scoped, RBAC-controlled, and treated distinctly from ConfigMaps by audit tooling and secret-scanning systems (even though base64 is encoding, not encryption). The convention itself carries enough weight even when the cryptographic guarantees don't.
+Originally on Minikube, secrets were stored as Kubernetes Secrets and injected into the pod as environment variables. Kubernetes Secrets are namespace-scoped, RBAC-controlled, and treated distinctly from ConfigMaps by audit tooling and secret-scanning systems (even though base64 is encoding, not encryption). The convention itself carries enough weight even when the cryptographic guarantees don't.
 
-MetricFlow's current EKS deployment uses ESO to synchronize the RDS-managed secret from AWS Secrets Manager into the `metricflow-secret` k8s Secret via IRSA.
+MetricFlow's current EKS deployment uses ESO to synchronize the RDS-managed secret from AWS Secrets Manager into the metricflow-secret k8s Secret. ESO's ServiceAccount is annotated with an IAM role, and EKS's OIDC provider exchanges its token for scoped, temporary AWS credentials. Thus, no static keys in the cluster.
 
-The known limitation in MetricFlow's setup is exactly that: base64 is decodable by anyone with namespace read access, and at-rest encryption in `etcd` is opt-in on most clusters and not configured on Minikube. The production evolution layers on three things: encryption at rest in `etcd`, tighter RBAC limiting which service accounts can read which secrets, and an external secret manager (AWS Secrets Manager or HashiCorp Vault) accessed via the External Secrets Operator, which keeps plaintext secrets out of the cluster entirely and centralizes rotation.
+The remaining residual gap in MetricFlow's setup is that base64 is decodable by anyone with namespace read access, and at-rest encryption in `etcd` is opt-in on most clusters. The production evolution layers on two things: encryption at rest in `etcd`, and tighter RBAC limiting which service accounts can read which secrets.
 
-For MetricFlow in its current scope, the Kubernetes-native baseline is appropriate. MetricFlow documents this gap explicitly, so it's more a demonstrated awareness of the production roadmap than an oversight. In the upcoming EKS implementation, the upgrade path is ESO + AWS Secrets Manager.
-
-_Trade-off:_ Kubernetes-native secrets are operationally simple but require additional layers to meet production security standards in a real multi-team production environment.
+_Trade-off:_ ESO+Secrets Manager via IRSA removes any plaintext leaking through, and allows for centralized credential rotation, but at the cost of an additional runtime dependency (ESO) and the IRSA setup overhead.
 
 ---
 
