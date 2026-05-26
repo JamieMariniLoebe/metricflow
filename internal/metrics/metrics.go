@@ -14,12 +14,13 @@ import (
 )
 
 type Metrics struct {
-	requestCounter    *prometheus.CounterVec
-	durationHistogram *prometheus.HistogramVec
-	QueuedCounter     prometheus.Counter
-	QueueDepthGauge   prometheus.Gauge
-	ShedCounter       prometheus.Counter
-	PersistedCounter  prometheus.Counter
+	requestCounter      *prometheus.CounterVec
+	durationHistogram   *prometheus.HistogramVec
+	QueuedCounter       prometheus.Counter
+	QueueDepthGauge     prometheus.Gauge
+	ShedCounter         prometheus.Counter
+	PersistedCounter    prometheus.Counter
+	WorkerPanicsCounter prometheus.Counter
 }
 
 func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
@@ -63,8 +64,14 @@ func NewMetrics(r prometheus.Registerer, pool *pgxpool.Pool) *Metrics {
 				Help: "Total number of metrics persisted",
 			},
 		),
+		WorkerPanicsCounter: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "metricflow_worker_panics_total",
+				Help: "Total number of worker panics",
+			},
+		),
 	}
-	r.MustRegister(m.requestCounter, m.durationHistogram, m.QueuedCounter, m.QueueDepthGauge, m.ShedCounter, m.PersistedCounter)
+	r.MustRegister(m.requestCounter, m.durationHistogram, m.QueuedCounter, m.QueueDepthGauge, m.ShedCounter, m.PersistedCounter, m.WorkerPanicsCounter)
 
 	r.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{

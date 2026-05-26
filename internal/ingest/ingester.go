@@ -14,31 +14,33 @@ import (
 )
 
 type Ingester struct {
-	ingest           chan models.Metric
-	db               *store.Store
-	workers          int
-	wait             *sync.WaitGroup
-	queueDepthGauge  prometheus.Gauge
-	shedCounter      prometheus.Counter
-	persistedCounter prometheus.Counter
-	ctx              context.Context
-	cancel           context.CancelFunc
+	ingest              chan models.Metric
+	db                  *store.Store
+	workers             int
+	wait                *sync.WaitGroup
+	queueDepthGauge     prometheus.Gauge
+	shedCounter         prometheus.Counter
+	persistedCounter    prometheus.Counter
+	workerPanicsCounter prometheus.Counter
+	ctx                 context.Context
+	cancel              context.CancelFunc
 }
 
-func NewIngester(s *store.Store, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter) *Ingester {
+func NewIngester(s *store.Store, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter, workerPanicsCounter prometheus.Counter) *Ingester {
 	i := make(chan models.Metric, w*5)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Ingester{
-		ingest:           i,
-		db:               s,
-		workers:          w,
-		wait:             &sync.WaitGroup{},
-		queueDepthGauge:  queueDepthGauge,
-		shedCounter:      shedCounter,
-		persistedCounter: persistedCounter,
-		ctx:              ctx,
-		cancel:           cancel,
+		ingest:              i,
+		db:                  s,
+		workers:             w,
+		wait:                &sync.WaitGroup{},
+		queueDepthGauge:     queueDepthGauge,
+		shedCounter:         shedCounter,
+		persistedCounter:    persistedCounter,
+		workerPanicsCounter: workerPanicsCounter,
+		ctx:                 ctx,
+		cancel:              cancel,
 	}
 }
 
@@ -46,14 +48,7 @@ func (ig *Ingester) Start() {
 	for i := 0; i < ig.workers; i++ {
 		ig.wait.Go(func() {
 			for item := range ig.ingest {
-				opCtx, cancel := context.WithTimeout(ig.ctx, 5*time.Second)
-				if err := ig.db.InsertMetric(opCtx, item); err != nil {
-					slog.Error("Error processing metric insertion", "error", err, "metric_name", item.MetricName)
-				} else {
-					ig.persistedCounter.Inc()
-				}
-				cancel()
-				ig.queueDepthGauge.Dec()
+				ig.process(item)
 			}
 		})
 	}
@@ -88,5 +83,22 @@ func (ig *Ingester) Shutdown(ctx context.Context) {
 		slog.Warn("ingester shutdown deadline expired; canceling in-flight inserts")
 		ig.cancel()
 		<-done
+	}
+}
+
+func (ig *Ingester) process(item models.Metric) {
+	opCtx, cancel := context.WithTimeout(ig.ctx, 5*time.Second)
+	defer cancel()
+	defer ig.queueDepthGauge.Dec()
+	defer func() {
+		if r := recover(); r != nil {
+			ig.workerPanicsCounter.Inc()
+			slog.Error("worker recovered from panic", "panic", r, "metric_name", item.MetricName)
+		}
+	}()
+	if err := ig.db.InsertMetric(opCtx, item); err != nil {
+		slog.Error("Error processing metric insertion", "error", err, "metric_name", item.MetricName)
+	} else {
+		ig.persistedCounter.Inc()
 	}
 }
