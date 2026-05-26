@@ -256,7 +256,9 @@ _Trade-off:_ Scratch makes interactive debugging impossible from inside the cont
 
 ### 7. Secrets Handling
 
-In the current Minikube deployment, secrets are stored as Kubernetes Secrets and injected into the pod as environment variables. Here is the baseline pattern: Kubernetes Secrets are namespace-scoped, RBAC-controlled, and treated distinctly from ConfigMaps by audit tooling and secret-scanning systems (even though base64 is encoding, not encryption). The convention itself carries enough weight even when the cryptographic guarantees don't.
+In the original Minikube deployment, secrets were stored as Kubernetes Secrets and injected into the pod as environment variables. Here was the baseline pattern: Kubernetes Secrets are namespace-scoped, RBAC-controlled, and treated distinctly from ConfigMaps by audit tooling and secret-scanning systems (even though base64 is encoding, not encryption). The convention itself carries enough weight even when the cryptographic guarantees don't.
+
+MetricFlow's current EKS deployment uses ESO to synchronize the RDS-managed secret from AWS Secrets Manager into the `metricflow-secret` k8s Secret via IRSA.
 
 The known limitation in MetricFlow's setup is exactly that: base64 is decodable by anyone with namespace read access, and at-rest encryption in `etcd` is opt-in on most clusters and not configured on Minikube. The production evolution layers on three things: encryption at rest in `etcd`, tighter RBAC limiting which service accounts can read which secrets, and an external secret manager (AWS Secrets Manager or HashiCorp Vault) accessed via the External Secrets Operator, which keeps plaintext secrets out of the cluster entirely and centralizes rotation.
 
