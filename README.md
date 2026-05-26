@@ -174,6 +174,7 @@ MetricFlow exposes the following metrics at `/metrics`:
 - `metricflow_ingest_queue_depth` - gauge of current channel occupancy
 - `metricflow_ingest_shed_total` - counter of 503s returned due to full channel
 - `metricflow_ingest_persisted_total` - counter of metrics successfully written to Postgres (worker side)
+- `metricflow_worker_panics_total` - counter of panics recovered in the worker pool
 - `metricflow_pgxpool_acquired_connections` - gauge of currently in-use pool connections
 - `metricflow_pgxpool_idle_connections` - gauge of currently idle pool connections
 - `metricflow_pgxpool_max_connections` - gauge of configured pool ceiling
