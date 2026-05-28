@@ -28,3 +28,6 @@ k8s/metricflow-secret.yaml
 
 # Terraform state files
 *.tfstate*
+
+# Go vendor directory (not used; resolve from go.mod)
+vendor/
