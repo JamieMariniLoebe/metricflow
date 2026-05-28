@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package metrics;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/JamieMariniLoebe/metricflow/proto;metricspb";
+
+service MetricsService {
+    rpc IngestMetric(IngestMetricsRequest) returns (IngestMetricsResponse);
+}
+
+message IngestMetricsRequest {
+    string metric_name        = 1;
+    string metric_type        = 2;
+    map<string,string> labels = 3;
+    double value = 4;
+    google.protobuf.Timestamp measured_at = 5;
+}
+
+message IngestMetricsResponse {
+
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,15 +14,18 @@ import (
 	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/database"
+	"github.com/JamieMariniLoebe/metricflow/internal/grpcserver"
 	"github.com/JamieMariniLoebe/metricflow/internal/handler"
 	"github.com/JamieMariniLoebe/metricflow/internal/ingest"
 	"github.com/JamieMariniLoebe/metricflow/internal/metrics"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
+	metricspb "github.com/JamieMariniLoebe/metricflow/proto"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -92,9 +96,21 @@ func main() {
 
 	h := handler.NewHandler(s, m.QueuedCounter, i)
 
+	grpcServer := grpc.NewServer()
+
 	i.Start()
 
 	r := chi.NewRouter()
+
+	grpcSvc := grpcserver.NewServer(s, m.QueuedCounter, i)
+
+	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
+
+	lis, err := net.Listen("tcp", ":9090")
+	if err != nil {
+		slog.Error("gRPC listen failed", "error", err)
+		os.Exit(1)
+	}
 
 	r.Use(m.Middleware)
 
@@ -124,7 +140,7 @@ func main() {
 
 	r.Get("/api/metrics", h.GetMetrics)
 
-	slog.Info("MetricFlow starting", "port", 8080)
+	slog.Info("MetricFlow starting", "http_port", 8080, "grpc_port", 9090)
 
 	srv := &http.Server{
 		ReadHeaderTimeout: 10 * time.Second, // mitigates Slowloris (G112)
@@ -135,6 +151,13 @@ func main() {
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "error", err)
+			stop()
+		}
+	}()
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			slog.Error("gRPC server failed", "error", err)
 			stop()
 		}
 	}()
