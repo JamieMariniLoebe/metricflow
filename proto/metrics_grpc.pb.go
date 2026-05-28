@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MetricsServiceClient interface {
-	IngestMetric(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error)
+	IngestMetric(ctx context.Context, in *IngestMetricsRequest, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
 }
 
 type metricsServiceClient struct {
@@ -37,9 +37,9 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 	return &metricsServiceClient{cc}
 }
 
-func (c *metricsServiceClient) IngestMetric(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error) {
+func (c *metricsServiceClient) IngestMetric(ctx context.Context, in *IngestMetricsRequest, opts ...grpc.CallOption) (*IngestMetricsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MetricsResponse)
+	out := new(IngestMetricsResponse)
 	err := c.cc.Invoke(ctx, MetricsService_IngestMetric_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (c *metricsServiceClient) IngestMetric(ctx context.Context, in *MetricsRequ
 // All implementations must embed UnimplementedMetricsServiceServer
 // for forward compatibility.
 type MetricsServiceServer interface {
-	IngestMetric(context.Context, *MetricsRequest) (*MetricsResponse, error)
+	IngestMetric(context.Context, *IngestMetricsRequest) (*IngestMetricsResponse, error)
 	mustEmbedUnimplementedMetricsServiceServer()
 }
 
@@ -62,7 +62,7 @@ type MetricsServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMetricsServiceServer struct{}
 
-func (UnimplementedMetricsServiceServer) IngestMetric(context.Context, *MetricsRequest) (*MetricsResponse, error) {
+func (UnimplementedMetricsServiceServer) IngestMetric(context.Context, *IngestMetricsRequest) (*IngestMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IngestMetric not implemented")
 }
 func (UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
@@ -87,7 +87,7 @@ func RegisterMetricsServiceServer(s grpc.ServiceRegistrar, srv MetricsServiceSer
 }
 
 func _MetricsService_IngestMetric_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MetricsRequest)
+	in := new(IngestMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func _MetricsService_IngestMetric_Handler(srv interface{}, ctx context.Context, 
 		FullMethod: MetricsService_IngestMetric_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MetricsServiceServer).IngestMetric(ctx, req.(*MetricsRequest))
+		return srv.(MetricsServiceServer).IngestMetric(ctx, req.(*IngestMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

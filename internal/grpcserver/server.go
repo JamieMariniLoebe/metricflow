@@ -27,7 +27,7 @@ func NewServer(store *store.Store, ingest prometheus.Counter, ingester *ingest.I
 	}
 }
 
-func (s *Server) IngestMetric(ctx context.Context, req *metricspb.MetricsRequest) (*metricspb.MetricsResponse, error) {
+func (s *Server) IngestMetric(ctx context.Context, req *metricspb.IngestMetricsRequest) (*metricspb.IngestMetricsResponse, error) {
 
 	if req.GetMetricName() == "" || req.GetMetricType() == "" || req.GetMeasuredAt() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Missing required field(s)")
@@ -49,5 +49,5 @@ func (s *Server) IngestMetric(ctx context.Context, req *metricspb.MetricsRequest
 
 	s.queuedCounter.Inc()
 
-	return &metricspb.MetricsResponse{}, nil
+	return &metricspb.IngestMetricsResponse{}, nil
 }

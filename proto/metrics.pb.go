@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type MetricsRequest struct {
+type IngestMetricsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MetricName    string                 `protobuf:"bytes,1,opt,name=metric_name,json=metricName,proto3" json:"metric_name,omitempty"`
 	MetricType    string                 `protobuf:"bytes,2,opt,name=metric_type,json=metricType,proto3" json:"metric_type,omitempty"`
@@ -33,20 +33,20 @@ type MetricsRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MetricsRequest) Reset() {
-	*x = MetricsRequest{}
+func (x *IngestMetricsRequest) Reset() {
+	*x = IngestMetricsRequest{}
 	mi := &file_proto_metrics_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MetricsRequest) String() string {
+func (x *IngestMetricsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MetricsRequest) ProtoMessage() {}
+func (*IngestMetricsRequest) ProtoMessage() {}
 
-func (x *MetricsRequest) ProtoReflect() protoreflect.Message {
+func (x *IngestMetricsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_metrics_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -58,66 +58,66 @@ func (x *MetricsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MetricsRequest.ProtoReflect.Descriptor instead.
-func (*MetricsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use IngestMetricsRequest.ProtoReflect.Descriptor instead.
+func (*IngestMetricsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_metrics_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *MetricsRequest) GetMetricName() string {
+func (x *IngestMetricsRequest) GetMetricName() string {
 	if x != nil {
 		return x.MetricName
 	}
 	return ""
 }
 
-func (x *MetricsRequest) GetMetricType() string {
+func (x *IngestMetricsRequest) GetMetricType() string {
 	if x != nil {
 		return x.MetricType
 	}
 	return ""
 }
 
-func (x *MetricsRequest) GetLabels() map[string]string {
+func (x *IngestMetricsRequest) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
 	}
 	return nil
 }
 
-func (x *MetricsRequest) GetValue() float64 {
+func (x *IngestMetricsRequest) GetValue() float64 {
 	if x != nil {
 		return x.Value
 	}
 	return 0
 }
 
-func (x *MetricsRequest) GetMeasuredAt() *timestamppb.Timestamp {
+func (x *IngestMetricsRequest) GetMeasuredAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.MeasuredAt
 	}
 	return nil
 }
 
-type MetricsResponse struct {
+type IngestMetricsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MetricsResponse) Reset() {
-	*x = MetricsResponse{}
+func (x *IngestMetricsResponse) Reset() {
+	*x = IngestMetricsResponse{}
 	mi := &file_proto_metrics_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MetricsResponse) String() string {
+func (x *IngestMetricsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MetricsResponse) ProtoMessage() {}
+func (*IngestMetricsResponse) ProtoMessage() {}
 
-func (x *MetricsResponse) ProtoReflect() protoreflect.Message {
+func (x *IngestMetricsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_metrics_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -129,8 +129,8 @@ func (x *MetricsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MetricsResponse.ProtoReflect.Descriptor instead.
-func (*MetricsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use IngestMetricsResponse.ProtoReflect.Descriptor instead.
+func (*IngestMetricsResponse) Descriptor() ([]byte, []int) {
 	return file_proto_metrics_proto_rawDescGZIP(), []int{1}
 }
 
@@ -138,22 +138,22 @@ var File_proto_metrics_proto protoreflect.FileDescriptor
 
 const file_proto_metrics_proto_rawDesc = "" +
 	"\n" +
-	"\x13proto/metrics.proto\x12\ametrics\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9d\x02\n" +
-	"\x0eMetricsRequest\x12\x1f\n" +
+	"\x13proto/metrics.proto\x12\ametrics\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa9\x02\n" +
+	"\x14IngestMetricsRequest\x12\x1f\n" +
 	"\vmetric_name\x18\x01 \x01(\tR\n" +
 	"metricName\x12\x1f\n" +
 	"\vmetric_type\x18\x02 \x01(\tR\n" +
-	"metricType\x12;\n" +
-	"\x06labels\x18\x03 \x03(\v2#.metrics.MetricsRequest.LabelsEntryR\x06labels\x12\x14\n" +
+	"metricType\x12A\n" +
+	"\x06labels\x18\x03 \x03(\v2).metrics.IngestMetricsRequest.LabelsEntryR\x06labels\x12\x14\n" +
 	"\x05value\x18\x04 \x01(\x01R\x05value\x12;\n" +
 	"\vmeasured_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"measuredAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x11\n" +
-	"\x0fMetricsResponse2S\n" +
-	"\x0eMetricsService\x12A\n" +
-	"\fIngestMetric\x12\x17.metrics.MetricsRequest\x1a\x18.metrics.MetricsResponseB8Z6github.com/JamieMariniLoebe/metricflow/proto;metricspbb\x06proto3"
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x17\n" +
+	"\x15IngestMetricsResponse2_\n" +
+	"\x0eMetricsService\x12M\n" +
+	"\fIngestMetric\x12\x1d.metrics.IngestMetricsRequest\x1a\x1e.metrics.IngestMetricsResponseB8Z6github.com/JamieMariniLoebe/metricflow/proto;metricspbb\x06proto3"
 
 var (
 	file_proto_metrics_proto_rawDescOnce sync.Once
@@ -169,16 +169,16 @@ func file_proto_metrics_proto_rawDescGZIP() []byte {
 
 var file_proto_metrics_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_metrics_proto_goTypes = []any{
-	(*MetricsRequest)(nil),        // 0: metrics.MetricsRequest
-	(*MetricsResponse)(nil),       // 1: metrics.MetricsResponse
-	nil,                           // 2: metrics.MetricsRequest.LabelsEntry
+	(*IngestMetricsRequest)(nil),  // 0: metrics.IngestMetricsRequest
+	(*IngestMetricsResponse)(nil), // 1: metrics.IngestMetricsResponse
+	nil,                           // 2: metrics.IngestMetricsRequest.LabelsEntry
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_proto_metrics_proto_depIdxs = []int32{
-	2, // 0: metrics.MetricsRequest.labels:type_name -> metrics.MetricsRequest.LabelsEntry
-	3, // 1: metrics.MetricsRequest.measured_at:type_name -> google.protobuf.Timestamp
-	0, // 2: metrics.MetricsService.IngestMetric:input_type -> metrics.MetricsRequest
-	1, // 3: metrics.MetricsService.IngestMetric:output_type -> metrics.MetricsResponse
+	2, // 0: metrics.IngestMetricsRequest.labels:type_name -> metrics.IngestMetricsRequest.LabelsEntry
+	3, // 1: metrics.IngestMetricsRequest.measured_at:type_name -> google.protobuf.Timestamp
+	0, // 2: metrics.MetricsService.IngestMetric:input_type -> metrics.IngestMetricsRequest
+	1, // 3: metrics.MetricsService.IngestMetric:output_type -> metrics.IngestMetricsResponse
 	3, // [3:4] is the sub-list for method output_type
 	2, // [2:3] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
