@@ -31,7 +31,7 @@ jobs:
             - name: gosec
               uses: securego/gosec@4a3bd8af174872c778439083ded7adbf3747e770 # v2.26.1
               with:
-                args: ./...
+                args: -exclude-generated ./...
 
             - name: golang-ci
               uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0

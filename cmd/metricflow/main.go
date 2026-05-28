@@ -106,7 +106,7 @@ func main() {
 
 	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
 
-	lis, err := net.Listen("tcp", ":9090")
+	lis, err := net.Listen("tcp", ":9090") // #nosec G102 - intentional: gRPC server listens on all interfaces; exposure controlled by Kubernetes NetworkPolicy
 	if err != nil {
 		slog.Error("gRPC listen failed", "error", err)
 		os.Exit(1)
