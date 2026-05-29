@@ -16,11 +16,15 @@ func main() {
 	conn, err := grpc.NewClient("localhost:9090", grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	if err != nil {
-		slog.Error("Client connection failed", "Error", err)
+		slog.Error("client connection failed", "error", err)
 		os.Exit(1)
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			slog.Error("failed to close connection", "error", err)
+		}
+	}()
 
 	client := metricspb.NewMetricsServiceClient(conn)
 
@@ -38,7 +42,7 @@ func main() {
 	_, err = client.IngestMetric(ctx, req)
 
 	if err != nil {
-		slog.Error("Ingesting of metric failed", "Error", err)
+		slog.Error("ingesting of metric failed", "error", err)
 	}
 
 }
