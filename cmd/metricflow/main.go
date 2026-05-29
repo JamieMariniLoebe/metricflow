@@ -25,40 +25,47 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
 func main() {
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("application error", "error", err)
+		os.Exit(1)
+	}
+
+}
+
+func run(ctx context.Context) error {
 	sourceURL := os.Getenv("SOURCE_URL")
 	if sourceURL == "" {
-		slog.Error("Empty source_url")
-		os.Exit(1)
+		return fmt.Errorf("empty source_url")
 	}
 	user := os.Getenv("DB_USER")
 	password := os.Getenv("DB_PASSWORD")
 	host := os.Getenv("DB_HOST")
 	if host == "" {
-		slog.Error("Empty host var")
-		os.Exit(1)
+		return fmt.Errorf("empty host var")
 	}
 	port := os.Getenv("DB_PORT")
 	if port == "" {
-		slog.Error("Empty port var")
-		os.Exit(1)
+		return fmt.Errorf("empty port var")
 	}
 	name := os.Getenv("DB_NAME")
 	if name == "" {
-		slog.Error("Empty name var")
-		os.Exit(1)
+		return fmt.Errorf("empty name var")
 	}
 
 	url := fmt.Sprintf("postgres://%s:%s/%s?sslmode=require", host, port, name)
 
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		slog.Error("Failed to parse db config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to parse db config: %w", err)
 	}
 
 	cfg.ConnConfig.User = user
@@ -67,8 +74,7 @@ func main() {
 	sqlDB := stdlib.OpenDB(*cfg.ConnConfig)
 
 	if err := database.RunMigrations(sqlDB, sourceURL); err != nil {
-		slog.Error("migration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	if err := sqlDB.Close(); err != nil {
@@ -77,14 +83,10 @@ func main() {
 
 	db, err := store.NewPool(cfg)
 	if err != nil {
-		slog.Error("database connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("database connection failed: %w", err)
 	}
 
 	defer db.Close()
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	reg := prometheus.NewRegistry()
 
@@ -102,15 +104,15 @@ func main() {
 
 	r := chi.NewRouter()
 
+	srv := &http.Server{
+		ReadHeaderTimeout: 10 * time.Second, // mitigates Slowloris (G112)
+		Addr:              ":8080",
+		Handler:           r,
+	}
+
 	grpcSvc := grpcserver.NewServer(s, m.QueuedCounter, i)
 
 	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
-
-	lis, err := net.Listen("tcp", ":9090") // #nosec G102 - intentional: gRPC server listens on all interfaces; exposure controlled by Kubernetes NetworkPolicy
-	if err != nil {
-		slog.Error("gRPC listen failed", "error", err)
-		os.Exit(1)
-	}
 
 	r.Use(m.Middleware)
 
@@ -140,39 +142,48 @@ func main() {
 
 	r.Get("/api/metrics", h.GetMetrics)
 
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		lis, err := net.Listen("tcp", ":9090") // #nosec G102 - intentional: gRPC server listens on all interfaces; exposure controlled by Kubernetes NetworkPolicy
+		if err != nil {
+			return fmt.Errorf("gRPC listen failed: %w", err)
+		}
+
+		if err := grpcServer.Serve(lis); err != nil {
+			return fmt.Errorf("gRPC server failed: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("HTTP listen failed: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("HTTP server shutdown failed", "error", err)
+		}
+
+		grpcServer.GracefulStop()
+
+		i.Shutdown(shutdownCtx)
+
+		slog.Info("Shutdown....", "reason", context.Cause(ctx))
+		return nil
+	})
+
 	slog.Info("MetricFlow starting", "http_port", 8080, "grpc_port", 9090)
 
-	srv := &http.Server{
-		ReadHeaderTimeout: 10 * time.Second, // mitigates Slowloris (G112)
-		Addr:              ":8080",
-		Handler:           r,
-	}
-
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server failed", "error", err)
-			stop()
-		}
-	}()
-
-	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			slog.Error("gRPC server failed", "error", err)
-			stop()
-		}
-	}()
-
-	<-ctx.Done()
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Error("HTTP server shutdown failed", "error", err)
-	}
-
-	i.Shutdown(shutdownCtx)
-
-	slog.Info("Shutdown....", "reason", context.Cause(ctx))
+	return g.Wait()
 
 }
