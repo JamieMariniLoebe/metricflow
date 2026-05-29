@@ -121,7 +121,7 @@ func run(ctx context.Context) error {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-			slog.Error("Failed to encode health response", "error", err)
+			slog.Error("failed to encode health response", "error", err)
 		}
 	})
 
@@ -131,7 +131,7 @@ func run(ctx context.Context) error {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := db.Ping(ctx); err != nil {
-			slog.Error("Readiness check failed", "error", err)
+			slog.Error("readiness check failed", "error", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
