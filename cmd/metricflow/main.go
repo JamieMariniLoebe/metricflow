@@ -27,6 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -60,8 +61,12 @@ func run(ctx context.Context) error {
 	if name == "" {
 		return fmt.Errorf("empty name var")
 	}
+	sslMode := os.Getenv("DB_SSLMODE")
+	if sslMode == "" {
+		sslMode = "require"
+	}
 
-	url := fmt.Sprintf("postgres://%s:%s/%s?sslmode=require", host, port, name)
+	url := fmt.Sprintf("postgres://%s:%s/%s?sslmode=%s", host, port, name, sslMode)
 
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
@@ -99,6 +104,8 @@ func run(ctx context.Context) error {
 	h := handler.NewHandler(s, m.QueuedCounter, i)
 
 	grpcServer := grpc.NewServer()
+
+	reflection.Register(grpcServer)
 
 	i.Start()
 
