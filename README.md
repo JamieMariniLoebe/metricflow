@@ -267,6 +267,18 @@ _Trade-off:_ ESO+Secrets Manager via IRSA removes any plaintext leaking through,
 
 ---
 
+### 8. Dual Ingestion API: HTTP + gRPC
+
+MetricFlow deliberately exposes two ingestion APIs: one via HTTP, and another via gRPC, each serving the same purpose but for different clients. Using just one ingestion protocol forces a tradeoff. Using just HTTP would provide a simpler debugging process, and compatibility, but at the cost of lower throughput at high-volume (due to larger payloads and per-request overhead). Whereas gRPC offers excellent throughput and higher performance at the cost of heavier client tooling and reduced debuggability.
+
+Choosing only one of these effectively sacrifices the abilities of the other. Implementing both in MetricFlow provides both options to clients, allowing for versatility in how metrics are ingested. Both ingestion APIs are lightweight adapters that sit on top of the same ingestion pipeline: the only difference being the entryway, with each having its own caveats. MetricFlow echoes OpenTelemetry's OTLP dual-transport approach, exposing the same telemetry over both gRPC and HTTP.
+
+Owning two separate ingestion APIs, however, means more overhead and more opportunities for bugs. Both paths need to be kept in sync, and including both means having one more piece to track in any future updates. On a project such as MetricFlow, including both is not necessarily a requirement: there aren't multiple streams sending various pieces of data through various different applications to MetricFlow, at varying sizes and volumes. The purpose of including both is for the sake of following the production-like pattern, given the low cost of doing so.
+
+_Trade-off:_ At high-volume/multi-stream scale, the dual API approach is no longer an optional polish piece, but a requirement. Conversely, if MetricFlow only served internal services, HTTP would become dead weight and dropped.
+
+---
+
 ## Tech Stack
 
 - **Go 1.25** - service implementation
