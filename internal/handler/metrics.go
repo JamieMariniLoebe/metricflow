@@ -110,16 +110,19 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	metrics, err = h.store.GetMetrics(r.Context(), filter)
+	opCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	metrics, err = h.store.GetMetrics(opCtx, filter)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.Canceled):
 			slog.Debug("context cancelled", "error", err)
-			http.Error(w, "Context cancelled", 499)
+			http.Error(w, "Internal service error", 499)
 		case errors.Is(err, context.DeadlineExceeded):
 			slog.Warn("deadline exceeded", "error", err)
-			http.Error(w, "Deadline exceeded", http.StatusServiceUnavailable)
+			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 		default:
 			slog.Error("query metrics failed", "error", err)
 			http.Error(w, "Internal service error", http.StatusInternalServerError)
