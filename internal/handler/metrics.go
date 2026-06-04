@@ -2,7 +2,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -50,7 +52,16 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	err = h.ingester.Submit(met)
 
 	if err != nil {
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		switch {
+		case errors.Is(err, ingest.ErrIngesterClosed):
+			slog.Warn("ingester closed", "error", err)
+			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+		case errors.Is(err, ingest.ErrQueueFull):
+			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+		default:
+			slog.Error("Unexpected submission error", "error", err)
+			http.Error(w, "Internal service error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -102,7 +113,17 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics, err = h.store.GetMetrics(r.Context(), filter)
 
 	if err != nil {
-		http.Error(w, "Internal service error", http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, context.Canceled):
+			slog.Debug("context cancelled", "error", err)
+			http.Error(w, "Context cancelled", 499)
+		case errors.Is(err, context.DeadlineExceeded):
+			slog.Warn("deadline exceeded", "error", err)
+			http.Error(w, "Deadline exceeded", http.StatusServiceUnavailable)
+		default:
+			slog.Error("query metrics failed", "error", err)
+			http.Error(w, "Internal service error", http.StatusInternalServerError)
+		}
 		return
 	}
 

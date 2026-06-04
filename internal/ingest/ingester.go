@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
@@ -24,7 +25,11 @@ type Ingester struct {
 	workerPanicsCounter prometheus.Counter
 	ctx                 context.Context
 	cancel              context.CancelFunc
+	closed              atomic.Bool
 }
+
+var ErrIngesterClosed = errors.New("ingester closed")
+var ErrQueueFull = errors.New("queue full")
 
 func NewIngester(s *store.Store, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter, workerPanicsCounter prometheus.Counter) *Ingester {
 	i := make(chan models.Metric, w*5)
@@ -55,18 +60,24 @@ func (ig *Ingester) Start() {
 }
 
 func (ig *Ingester) Submit(m models.Metric) error {
+	if ig.closed.Load() {
+		return ErrIngesterClosed
+	}
+
 	select {
 	case ig.ingest <- m:
 		ig.queueDepthGauge.Inc()
 		return nil
 	default:
 		ig.shedCounter.Inc()
-		return errors.New("channel full")
+		return ErrQueueFull
 	}
 }
 
 func (ig *Ingester) Shutdown(ctx context.Context) {
 	defer ig.cancel()
+
+	ig.closed.Store(true)
 
 	close(ig.ingest)
 

@@ -27,14 +27,17 @@ func (s *Store) InsertMetric(ctx context.Context, metric models.Metric) error {
 	postgresLabels, err := json.Marshal(metric.Labels)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal labels: %w", err)
 	}
 
 	query := "INSERT INTO metrics (metric_name, metric_type, labels, val, measured_at) VALUES ($1, $2, $3, $4, $5)"
 
 	_, err = s.db.Exec(ctx, query, metric.MetricName, metric.MetricType, postgresLabels, metric.Val, metric.MeasuredAt)
 
-	return err
+	if err != nil {
+		return fmt.Errorf("insert metric: %w", err)
+	}
+	return nil
 }
 
 // GetMetrics queries metric data points from the database using optional filters
@@ -72,7 +75,7 @@ func (s *Store) GetMetrics(ctx context.Context, filter models.MetricFilter) ([]m
 	r, err := s.db.Query(ctx, q, args...)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("database query: %w", err)
 	}
 
 	defer r.Close()
@@ -84,7 +87,7 @@ func (s *Store) GetMetrics(ctx context.Context, filter models.MetricFilter) ([]m
 		err := r.Scan(&m.ID, &m.MetricName, &m.MetricType, &m.Labels, &m.Val, &m.CreatedAt, &m.MeasuredAt)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("row scan: %w", err)
 		}
 
 		metrics = append(metrics, m)
@@ -93,7 +96,7 @@ func (s *Store) GetMetrics(ctx context.Context, filter models.MetricFilter) ([]m
 	err = r.Err()
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("pgx rows error: %w", err)
 	}
 
 	return metrics, nil
