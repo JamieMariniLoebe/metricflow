@@ -21,6 +21,7 @@ import (
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	metricspb "github.com/JamieMariniLoebe/metricflow/proto"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus"
@@ -121,6 +122,7 @@ func run(ctx context.Context) error {
 
 	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
 
+	r.Use(middleware.RequestID)
 	r.Use(m.Middleware)
 
 	r.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))

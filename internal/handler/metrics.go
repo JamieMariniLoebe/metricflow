@@ -12,6 +12,7 @@ import (
 	"github.com/JamieMariniLoebe/metricflow/internal/ingest"
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
 	"github.com/JamieMariniLoebe/metricflow/internal/store"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -33,6 +34,8 @@ func NewHandler(store *store.Store, ingest prometheus.Counter, ingester *ingest.
 
 // CreateMetric handles POST requests to ingest a new metric data point
 func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
+	logger := slog.With("request_id", middleware.GetReqID(r.Context()))
+
 	decode := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024))
 	decode.DisallowUnknownFields()
 	var met models.Metric
@@ -54,12 +57,12 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ingest.ErrIngesterClosed):
-			slog.Warn("ingester closed", "error", err)
+			logger.Warn("ingester closed", "error", err)
 			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 		case errors.Is(err, ingest.ErrQueueFull):
 			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 		default:
-			slog.Error("Unexpected submission error", "error", err)
+			logger.Error("Unexpected submission error", "error", err)
 			http.Error(w, "Internal service error", http.StatusInternalServerError)
 		}
 		return
@@ -72,12 +75,14 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(met)
 
 	if err != nil {
-		slog.Error("Failed to encode metric response", "error", err)
+		logger.Error("Failed to encode metric response", "error", err)
 	}
 }
 
 // GetMetrics handles GET requests to query metrics with optional filters
 func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	logger := slog.With("request_id", middleware.GetReqID(r.Context()))
+
 	params := r.URL.Query()
 
 	var filter models.MetricFilter
@@ -118,13 +123,13 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, context.Canceled):
-			slog.Debug("context cancelled", "error", err)
+			logger.Debug("context cancelled", "error", err)
 			http.Error(w, "Internal service error", 499)
 		case errors.Is(err, context.DeadlineExceeded):
-			slog.Warn("deadline exceeded", "error", err)
+			logger.Warn("deadline exceeded", "error", err)
 			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 		default:
-			slog.Error("query metrics failed", "error", err)
+			logger.Error("query metrics failed", "error", err)
 			http.Error(w, "Internal service error", http.StatusInternalServerError)
 		}
 		return
@@ -134,6 +139,6 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(metrics)
 	if err != nil {
-		slog.Error("Failed to encode metrics response", "error", err)
+		logger.Error("Failed to encode metrics response", "error", err)
 	}
 }
