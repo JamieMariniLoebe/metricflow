@@ -118,7 +118,7 @@ func run(ctx context.Context) error {
 		Handler:           r,
 	}
 
-	grpcSvc := grpcserver.NewServer(s, m.QueuedCounter, i)
+	grpcSvc := grpcserver.NewServer(m.QueuedCounter, i)
 
 	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
 

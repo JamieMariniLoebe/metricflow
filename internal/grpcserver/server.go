@@ -1,3 +1,4 @@
+// Package grpcserver handles metric ingestion over gRPC
 package grpcserver
 
 import (
@@ -5,7 +6,6 @@ import (
 
 	"github.com/JamieMariniLoebe/metricflow/internal/ingest"
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
-	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	metricspb "github.com/JamieMariniLoebe/metricflow/proto"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc/codes"
@@ -14,14 +14,12 @@ import (
 
 type Server struct {
 	metricspb.UnimplementedMetricsServiceServer
-	store         *store.Store
 	ingester      *ingest.Ingester
 	queuedCounter prometheus.Counter
 }
 
-func NewServer(store *store.Store, ingest prometheus.Counter, ingester *ingest.Ingester) *Server {
+func NewServer(ingest prometheus.Counter, ingester *ingest.Ingester) *Server {
 	return &Server{
-		store:         store,
 		ingester:      ingester,
 		queuedCounter: ingest,
 	}
