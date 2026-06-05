@@ -1,4 +1,4 @@
-// Package metrics
+// Package metrics defines Prometheus collectors and HTTP instrumentation middleware
 package metrics
 
 import (

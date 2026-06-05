@@ -1,4 +1,4 @@
-// Package handler processes HTTP requests
+// Package handler manages metric ingestion and queries over HTTP/JSON
 package handler
 
 import (
