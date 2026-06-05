@@ -8,7 +8,12 @@ services:
         condition: service_healthy
     environment:
       SOURCE_URL: file:///migrations
-      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: disable
 
   postgres:
     image: postgres:16
@@ -26,17 +31,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
   prometheus:
     image: prom/prometheus:v3.5.1
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+
   grafana:
     image: grafana/grafana:12.4.3
     volumes:
       - ./k8s/grafana:/etc/grafana/provisioning
     ports:
       - "3000:3000"
+      
 volumes:
   pgdata:
