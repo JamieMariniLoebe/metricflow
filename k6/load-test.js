@@ -1,6 +1,8 @@
 import http from 'k6/http'
 import { sleep, check } from 'k6'
 
+http.setResponseCallback(http.expectedStatuses(202, 503))
+
 export const options = {
     stages: [
         { duration: '30s', target: 10 },
@@ -11,6 +13,10 @@ export const options = {
         { duration: '2m', target: 200 },
         { duration: '30s', target: 0 }
     ],
+    thresholds: {
+        http_req_duration: ['p(95)<25'],
+        checks: ['rate>0.99']
+    },
 };
 
 export default function () { 
@@ -23,9 +29,7 @@ export default function () {
     const res = http.post(url, payload, params)
 
     check(res, {
-        'status 202 accepted': (r) => r.status === 202,
-        'status 503 shed':     (r) => r.status === 503,
-
+        'expected status (202 or 503)': (r) => r.status === 202 || r.status === 503
     })
 
     sleep(.5)
