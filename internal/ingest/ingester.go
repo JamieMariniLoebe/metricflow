@@ -10,13 +10,16 @@ import (
 	"time"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
-	"github.com/JamieMariniLoebe/metricflow/internal/store"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type MetricInserter interface {
+	InsertMetric(ctx context.Context, m models.Metric) error
+}
+
 type Ingester struct {
 	ingest              chan models.Metric
-	db                  *store.Store
+	db                  MetricInserter
 	workers             int
 	wait                *sync.WaitGroup
 	queueDepthGauge     prometheus.Gauge
@@ -31,7 +34,7 @@ type Ingester struct {
 var ErrIngesterClosed = errors.New("ingester closed")
 var ErrQueueFull = errors.New("queue full")
 
-func NewIngester(s *store.Store, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter, workerPanicsCounter prometheus.Counter) *Ingester {
+func NewIngester(s MetricInserter, w int, queueDepthGauge prometheus.Gauge, shedCounter prometheus.Counter, persistedCounter prometheus.Counter, workerPanicsCounter prometheus.Counter) *Ingester {
 	i := make(chan models.Metric, w*5)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -77,7 +80,9 @@ func (ig *Ingester) Submit(m models.Metric) error {
 func (ig *Ingester) Shutdown(ctx context.Context) {
 	defer ig.cancel()
 
-	ig.closed.Store(true)
+	if ig.closed.Swap(true) {
+		return
+	}
 
 	close(ig.ingest)
 
