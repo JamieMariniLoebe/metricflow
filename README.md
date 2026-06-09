@@ -115,7 +115,7 @@ Load testing was run with k6 to verify the service's backpressure and graceful d
 | Medium     |       50 VUs |     99.2 req/s |                0% | 259 µs | 492 µs | 1.47 ms |
 | Overload   |      200 VUs |  252–262 req/s | ~40% peak / 26.6% | 255 µs | 484 µs |  940 µs |
 
-The k6 run produced 77,276 total requests, of which 56,715 returned 202 and 20,561 returned 503. Server-side counters matched exactly: queued = 56,715, persisted = 56,715, shed = 20,561. Three-way parity across the full handler -> worker -> DB path validates not just the rejection path but the entire pipeline. Zero drain loss, zero drift between layers, and zero requests unaccounted for. The instrumentation can be trusted during real incidents.
+The k6 run produced 77,276 total requests, of which 56,715 returned 202 and 20,561 returned 503. Server-side counters matched exactly: accepted = 56,715, persisted = 56,715, shed = 20,561. Three-way parity across the full handler -> worker -> DB path validates not just the rejection path but the entire pipeline. Zero drain loss, zero drift between layers, and zero requests unaccounted for. The instrumentation can be trusted during real incidents.
 
 The p50 and p95 numbers are the real headline finding: server-side latency held essentially constant across a 20x load increase, validating the core backpressure premise. The p99 column required careful reading, however. The 3.05 ms baseline reading reflects the canonical pool-warmup spike documented across virtually every connection-pooled service: pgxpool lazily creates connections on first acquire, and the small baseline sample (~3k requests) was dominated by those early outliers. By overload (~30,000 samples), the pool is fully warm and the p99 reflects true steady-state tail behavior at 940 µs. The capacity ceiling is enforced cleanly: rather than allowing queues to build, the system rejects what it can't handle, preserving low latency for accepted traffic. The alternative (unbounded queuing) produces the gradual slowdown, timeout cascades and unpredictable tail latency that backpressure exists to prevent.
 
@@ -170,7 +170,7 @@ MetricFlow exposes the following metrics at `/metrics`:
 
 - `http_requests_total` - counter, labeled by method, path, status
 - `http_request_duration_seconds` - histogram, labeled by method, path, status
-- `metricflow_ingest_queued_total` - counter of metrics accepted into the queue (handler side)
+- `metricflow_ingest_accepted_total` - counter of metrics accepted into the queue (handler side)
 - `metricflow_ingest_queue_depth` - gauge of current channel occupancy
 - `metricflow_ingest_shed_total` - counter of 503s returned due to full channel
 - `metricflow_ingest_persisted_total` - counter of metrics successfully written to Postgres (worker side)
@@ -224,7 +224,7 @@ _Trade-off:_ Three numbers are coupled together: buffer size, worker count, and 
 
 When the ingestion channel is full, MetricFlow returns `503 Service Unavailable` immediately, rather than blocking the caller or queuing indefinitely. This is a deliberate fast-fail design choice: blocking the HTTP handler would tie up a connection and push back-pressure upstream to the caller's connection pool, which in turn cascades in ways that become harder to observe and control than an explicit rejection. A 503 response is the honest signal here, as the service itself is at capacity and not the specific client. It's the correct status code for a load balancer or rate-limiter to act on. Each shed increments the `metricflow_ingest_shed_total` counter, so the back-pressure regime is fully observable rather than a silent failure mode.
 
-The k6 overload test validated the design choice. Across an 8-minute run, k6 reported 20,561 failures and the shed counter incremented to exactly 20,561 — and the queued counter (56,715) matched the worker-side persisted counter (56,715), confirming three-way parity across the entire pipeline. Failures were intentional rejections, not service errors, and accepted traffic landed in Postgres without loss. The deeper principle: under overload, fail-fast beats fail-slow. With ~40% of requests shed at peak (133–158 shed/sec sustained over
+The k6 overload test validated the design choice. Across an 8-minute run, k6 reported 20,561 failures and the shed counter incremented to exactly 20,561 — and the accepted counter (56,715) matched the worker-side persisted counter (56,715), confirming three-way parity across the entire pipeline. Failures were intentional rejections, not service errors, and accepted traffic landed in Postgres without loss. The deeper principle: under overload, fail-fast beats fail-slow. With ~40% of requests shed at peak (133–158 shed/sec sustained over
 the 200 VU plateau), accepted traffic stayed at ~484 µs p95 throughout.
 
 _Trade-off:_ A 503 shed-and-retry model requires callers to implement their own retry logic with backoff. A blocking model, however, absorbs short bursts more transparently but hides capacity problems until they become real outages.

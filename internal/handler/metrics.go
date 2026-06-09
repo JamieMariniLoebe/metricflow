@@ -18,17 +18,17 @@ import (
 
 // Handler holds dependencies for HTTP request handlers
 type Handler struct {
-	store         *store.Store
-	queuedCounter prometheus.Counter
-	ingester      *ingest.Ingester
+	store           *store.Store
+	acceptedCounter prometheus.Counter
+	ingester        *ingest.Ingester
 }
 
 // NewHandler creates a Handler with the given store for database access
 func NewHandler(store *store.Store, ingest prometheus.Counter, ingester *ingest.Ingester) *Handler {
 	return &Handler{
-		store:         store,
-		queuedCounter: ingest,
-		ingester:      ingester,
+		store:           store,
+		acceptedCounter: ingest,
+		ingester:        ingester,
 	}
 }
 
@@ -68,7 +68,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.queuedCounter.Inc()
+	h.acceptedCounter.Inc()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

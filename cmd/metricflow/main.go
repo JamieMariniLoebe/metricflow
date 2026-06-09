@@ -102,7 +102,7 @@ func run(ctx context.Context) error {
 
 	i := ingest.NewIngester(s, 5, m.QueueDepthGauge, m.ShedCounter, m.PersistedCounter, m.WorkerPanicsCounter)
 
-	h := handler.NewHandler(s, m.QueuedCounter, i)
+	h := handler.NewHandler(s, m.AcceptedCounter, i)
 
 	grpcServer := grpc.NewServer()
 
@@ -118,7 +118,7 @@ func run(ctx context.Context) error {
 		Handler:           r,
 	}
 
-	grpcSvc := grpcserver.NewServer(m.QueuedCounter, i)
+	grpcSvc := grpcserver.NewServer(m.AcceptedCounter, i)
 
 	metricspb.RegisterMetricsServiceServer(grpcServer, grpcSvc)
 

@@ -14,14 +14,14 @@ import (
 
 type Server struct {
 	metricspb.UnimplementedMetricsServiceServer
-	ingester      *ingest.Ingester
-	queuedCounter prometheus.Counter
+	ingester        *ingest.Ingester
+	acceptedCounter prometheus.Counter
 }
 
 func NewServer(ingest prometheus.Counter, ingester *ingest.Ingester) *Server {
 	return &Server{
-		ingester:      ingester,
-		queuedCounter: ingest,
+		ingester:        ingester,
+		acceptedCounter: ingest,
 	}
 }
 
@@ -45,7 +45,7 @@ func (s *Server) IngestMetric(ctx context.Context, req *metricspb.IngestMetricsR
 		return nil, status.Error(codes.Unavailable, "Service Unavailable")
 	}
 
-	s.queuedCounter.Inc()
+	s.acceptedCounter.Inc()
 
 	return &metricspb.IngestMetricsResponse{}, nil
 }
