@@ -196,8 +196,15 @@ func TestPanicRecover(t *testing.T) {
 		return nil
 	}
 
-	arch.ig.Submit(met1)
-	arch.ig.Submit(met2)
+	err := arch.ig.Submit(met1)
+	if err != nil {
+		t.Errorf("Submit() err = %v", err)
+	}
+
+	err = arch.ig.Submit(met2)
+	if err != nil {
+		t.Errorf("Submit() err = %v", err)
+	}
 
 	arch.ig.Start()
 
