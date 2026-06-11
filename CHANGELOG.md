@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - CD pipeline (`deploy.yml`): OIDC→ECR build, two-stage Trivy scan + SARIF upload, push, EKS deploy with rollout status
 - Hardened CI (`ci.yml`): govulncheck, gosec, golangci-lint, SHA-pinned actions
 - Terraform RDS, ESO (External Secrets), and GitHub OIDC stacks
+- Per-request request_id propagated into structured logs via chi RequestID middleware
 
 ### Changed
 
@@ -45,7 +46,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Known Limitations
 
-- Request IDs not propagated through `slog`
 - Single-replica deployment with no HorizontalPodAutoscaler or PodDisruptionBudget; multi-replica + HPA pending
 - Test coverage limited to the ingest package: handler, gRPC, and store layers untested (broader unit + integration tests pending)
 - Database schema lacks NOT NULL constraints and a `(metric_name, measured_at)` index — pending follow-up
