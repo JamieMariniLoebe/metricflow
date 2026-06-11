@@ -3,6 +3,8 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 
 	"github.com/JamieMariniLoebe/metricflow/internal/ingest"
 	"github.com/JamieMariniLoebe/metricflow/internal/models"
@@ -42,7 +44,16 @@ func (s *Server) IngestMetric(ctx context.Context, req *metricspb.IngestMetricsR
 	err := s.ingester.Submit(met)
 
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, "Service Unavailable")
+		switch {
+		case errors.Is(err, ingest.ErrIngesterClosed):
+			slog.Warn("ingester closed", "error", err)
+			return nil, status.Error(codes.Unavailable, "Service temporarily unavailable")
+		case errors.Is(err, ingest.ErrQueueFull):
+			return nil, status.Error(codes.ResourceExhausted, "Too many requests, retry with backoff")
+		default:
+			slog.Error("unexpected submit error", "error", err)
+			return nil, status.Error(codes.Internal, "Internal service error")
+		}
 	}
 
 	s.acceptedCounter.Inc()
