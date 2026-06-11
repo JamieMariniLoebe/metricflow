@@ -113,7 +113,7 @@ func (ig *Ingester) process(item models.Metric) {
 		}
 	}()
 	if err := ig.db.InsertMetric(opCtx, item); err != nil {
-		slog.Error("Error processing metric insertion", "error", err, "metric_name", item.MetricName)
+		slog.Error("metric insertion failed", "error", err, "metric_name", item.MetricName)
 	} else {
 		ig.persistedCounter.Inc()
 	}

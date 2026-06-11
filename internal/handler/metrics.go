@@ -62,7 +62,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ingest.ErrQueueFull):
 			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 		default:
-			logger.Error("Unexpected submission error", "error", err)
+			logger.Error("unexpected submission error", "error", err)
 			http.Error(w, "Internal service error", http.StatusInternalServerError)
 		}
 		return

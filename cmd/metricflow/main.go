@@ -187,7 +187,7 @@ func run(ctx context.Context) error {
 
 		i.Shutdown(shutdownCtx)
 
-		slog.Info("Shutdown....", "reason", context.Cause(ctx))
+		slog.Info("shutdown", "reason", context.Cause(ctx))
 		return nil
 	})
 
