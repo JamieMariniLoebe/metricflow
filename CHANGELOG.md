@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Hardened CI (`ci.yml`): govulncheck, gosec, golangci-lint, SHA-pinned actions
 - Terraform RDS, ESO (External Secrets), and GitHub OIDC stacks
 - Per-request request_id propagated into structured logs via chi RequestID middleware
+- gRPC ingestion endpoint: `MetricsService.IngestMetric` unary RPC on container port 9090 (host 9091 in Compose); shares the ingestion pipeline with the HTTP path. Submit errors map to distinct status codes: `ResourceExhausted` on shed, `Unavailable` on shutdown, `Internal` otherwise.
+- gRPC unary handler test suite (4 tests: `TestIngestMetricQueueFull`/`TestIngestMetricHappy`/`TestIngestMetricClosed`/`TestIngestMetricInvalidArgument`), driving the handler as a plain method over a real ingester steered into each error state; proves the error-to-code mapping that the ingester suite couldn't see.
 
 ### Changed
 
@@ -47,7 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Known Limitations
 
 - Single-replica deployment with no HorizontalPodAutoscaler or PodDisruptionBudget; multi-replica + HPA pending
-- Test coverage limited to the ingest package: handler, gRPC, and store layers untested (broader unit + integration tests pending)
+- Test coverage limited to the ingest and grpcserver packages: handler and store layers untested (broader integration tests pending)
 - Database schema lacks NOT NULL constraints and a `(metric_name, measured_at)` index — pending follow-up
 
 ## [0.2.0] — 2026-04-22 — Phase 2A Close
