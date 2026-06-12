@@ -134,6 +134,66 @@ func (*IngestMetricsResponse) Descriptor() ([]byte, []int) {
 	return file_proto_metrics_proto_rawDescGZIP(), []int{1}
 }
 
+type StreamMetricsSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      uint64                 `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Shed          uint64                 `protobuf:"varint,2,opt,name=shed,proto3" json:"shed,omitempty"`
+	Rejected      uint64                 `protobuf:"varint,3,opt,name=rejected,proto3" json:"rejected,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamMetricsSummary) Reset() {
+	*x = StreamMetricsSummary{}
+	mi := &file_proto_metrics_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamMetricsSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamMetricsSummary) ProtoMessage() {}
+
+func (x *StreamMetricsSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_metrics_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamMetricsSummary.ProtoReflect.Descriptor instead.
+func (*StreamMetricsSummary) Descriptor() ([]byte, []int) {
+	return file_proto_metrics_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *StreamMetricsSummary) GetAccepted() uint64 {
+	if x != nil {
+		return x.Accepted
+	}
+	return 0
+}
+
+func (x *StreamMetricsSummary) GetShed() uint64 {
+	if x != nil {
+		return x.Shed
+	}
+	return 0
+}
+
+func (x *StreamMetricsSummary) GetRejected() uint64 {
+	if x != nil {
+		return x.Rejected
+	}
+	return 0
+}
+
 var File_proto_metrics_proto protoreflect.FileDescriptor
 
 const file_proto_metrics_proto_rawDesc = "" +
@@ -151,9 +211,14 @@ const file_proto_metrics_proto_rawDesc = "" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x17\n" +
-	"\x15IngestMetricsResponse2_\n" +
+	"\x15IngestMetricsResponse\"b\n" +
+	"\x14StreamMetricsSummary\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\x04R\baccepted\x12\x12\n" +
+	"\x04shed\x18\x02 \x01(\x04R\x04shed\x12\x1a\n" +
+	"\brejected\x18\x03 \x01(\x04R\brejected2\xb0\x01\n" +
 	"\x0eMetricsService\x12M\n" +
-	"\fIngestMetric\x12\x1d.metrics.IngestMetricsRequest\x1a\x1e.metrics.IngestMetricsResponseB8Z6github.com/JamieMariniLoebe/metricflow/proto;metricspbb\x06proto3"
+	"\fIngestMetric\x12\x1d.metrics.IngestMetricsRequest\x1a\x1e.metrics.IngestMetricsResponse\x12O\n" +
+	"\rStreamMetrics\x12\x1d.metrics.IngestMetricsRequest\x1a\x1d.metrics.StreamMetricsSummary(\x01B8Z6github.com/JamieMariniLoebe/metricflow/proto;metricspbb\x06proto3"
 
 var (
 	file_proto_metrics_proto_rawDescOnce sync.Once
@@ -167,20 +232,23 @@ func file_proto_metrics_proto_rawDescGZIP() []byte {
 	return file_proto_metrics_proto_rawDescData
 }
 
-var file_proto_metrics_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_metrics_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_metrics_proto_goTypes = []any{
 	(*IngestMetricsRequest)(nil),  // 0: metrics.IngestMetricsRequest
 	(*IngestMetricsResponse)(nil), // 1: metrics.IngestMetricsResponse
-	nil,                           // 2: metrics.IngestMetricsRequest.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*StreamMetricsSummary)(nil),  // 2: metrics.StreamMetricsSummary
+	nil,                           // 3: metrics.IngestMetricsRequest.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
 }
 var file_proto_metrics_proto_depIdxs = []int32{
-	2, // 0: metrics.IngestMetricsRequest.labels:type_name -> metrics.IngestMetricsRequest.LabelsEntry
-	3, // 1: metrics.IngestMetricsRequest.measured_at:type_name -> google.protobuf.Timestamp
+	3, // 0: metrics.IngestMetricsRequest.labels:type_name -> metrics.IngestMetricsRequest.LabelsEntry
+	4, // 1: metrics.IngestMetricsRequest.measured_at:type_name -> google.protobuf.Timestamp
 	0, // 2: metrics.MetricsService.IngestMetric:input_type -> metrics.IngestMetricsRequest
-	1, // 3: metrics.MetricsService.IngestMetric:output_type -> metrics.IngestMetricsResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
+	0, // 3: metrics.MetricsService.StreamMetrics:input_type -> metrics.IngestMetricsRequest
+	1, // 4: metrics.MetricsService.IngestMetric:output_type -> metrics.IngestMetricsResponse
+	2, // 5: metrics.MetricsService.StreamMetrics:output_type -> metrics.StreamMetricsSummary
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -197,7 +265,7 @@ func file_proto_metrics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_metrics_proto_rawDesc), len(file_proto_metrics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

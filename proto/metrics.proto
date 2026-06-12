@@ -8,6 +8,7 @@ option go_package = "github.com/JamieMariniLoebe/metricflow/proto;metricspb";
 
 service MetricsService {
     rpc IngestMetric(IngestMetricsRequest) returns (IngestMetricsResponse);
+    rpc StreamMetrics(stream IngestMetricsRequest) returns (StreamMetricsSummary);
 }
 
 message IngestMetricsRequest {
@@ -20,4 +21,10 @@ message IngestMetricsRequest {
 
 message IngestMetricsResponse {
 
+}
+
+message StreamMetricsSummary {
+    uint64 accepted = 1;
+    uint64 shed = 2;
+    uint64 rejected = 3;
 }

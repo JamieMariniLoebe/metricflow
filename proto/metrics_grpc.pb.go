@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MetricsService_IngestMetric_FullMethodName = "/metrics.MetricsService/IngestMetric"
+	MetricsService_IngestMetric_FullMethodName  = "/metrics.MetricsService/IngestMetric"
+	MetricsService_StreamMetrics_FullMethodName = "/metrics.MetricsService/StreamMetrics"
 )
 
 // MetricsServiceClient is the client API for MetricsService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MetricsServiceClient interface {
 	IngestMetric(ctx context.Context, in *IngestMetricsRequest, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
+	StreamMetrics(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestMetricsRequest, StreamMetricsSummary], error)
 }
 
 type metricsServiceClient struct {
@@ -47,11 +49,25 @@ func (c *metricsServiceClient) IngestMetric(ctx context.Context, in *IngestMetri
 	return out, nil
 }
 
+func (c *metricsServiceClient) StreamMetrics(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestMetricsRequest, StreamMetricsSummary], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_StreamMetrics_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[IngestMetricsRequest, StreamMetricsSummary]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetricsService_StreamMetricsClient = grpc.ClientStreamingClient[IngestMetricsRequest, StreamMetricsSummary]
+
 // MetricsServiceServer is the server API for MetricsService service.
 // All implementations must embed UnimplementedMetricsServiceServer
 // for forward compatibility.
 type MetricsServiceServer interface {
 	IngestMetric(context.Context, *IngestMetricsRequest) (*IngestMetricsResponse, error)
+	StreamMetrics(grpc.ClientStreamingServer[IngestMetricsRequest, StreamMetricsSummary]) error
 	mustEmbedUnimplementedMetricsServiceServer()
 }
 
@@ -64,6 +80,9 @@ type UnimplementedMetricsServiceServer struct{}
 
 func (UnimplementedMetricsServiceServer) IngestMetric(context.Context, *IngestMetricsRequest) (*IngestMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IngestMetric not implemented")
+}
+func (UnimplementedMetricsServiceServer) StreamMetrics(grpc.ClientStreamingServer[IngestMetricsRequest, StreamMetricsSummary]) error {
+	return status.Error(codes.Unimplemented, "method StreamMetrics not implemented")
 }
 func (UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
 func (UnimplementedMetricsServiceServer) testEmbeddedByValue()                        {}
@@ -104,6 +123,13 @@ func _MetricsService_IngestMetric_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MetricsService_StreamMetrics_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MetricsServiceServer).StreamMetrics(&grpc.GenericServerStream[IngestMetricsRequest, StreamMetricsSummary]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetricsService_StreamMetricsServer = grpc.ClientStreamingServer[IngestMetricsRequest, StreamMetricsSummary]
+
 // MetricsService_ServiceDesc is the grpc.ServiceDesc for MetricsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -116,6 +142,12 @@ var MetricsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MetricsService_IngestMetric_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamMetrics",
+			Handler:       _MetricsService_StreamMetrics_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "proto/metrics.proto",
 }
