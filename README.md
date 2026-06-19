@@ -117,12 +117,43 @@ Server reflection enabled, so grpcurl works without the .proto.
 | `labels`      | `map<string,string>` | no       |
 
 Returns an empty response.
-Status codes: `InvalidArgument` (missing required field), `Unavailable` (queue full or shutting down), `OK` on accept.
+Status codes: `InvalidArgument` (missing required field), `ResourceExhausted` (queue full - shed, back off and retry), `Unavailable` (shutting down, retry elsewhere), `Internal` (unexpected), `OK` on accept.
 
-**Example grpcurl:**
+#### mTLS
+
+The gRPC listener requires **mutual TLS**. A client must present a certificate signed by the project CA, and in turn verifies the server's certificate against that same CA (`tls.RequireAndVerifyClientCert`). Both pieces are enforced: a connection with no client certificate at all is rejected by the _require_ check, and one bearing a certificate from any other issuer is rejected by the _verify_ check.
+
+Certificates are **not** committed: `certs/` is gitignored. Generate a local CA and a server/client pair with OpenSSL:
 
 ```bash
-grpcurl -plaintext -d '{"metric_name":"cpu_usage","metric_type":"gauge","value":42.5,"measured_at":"2026-04-22T15:00:00Z"}' localhost:9091 metrics.MetricsService/IngestMetric
+mkdir -p certs
+
+# Self-signed CA
+openssl req -x509 -newkey rsa:4096 -nodes -keyout certs/ca.key -out certs/ca.crt \
+  -subj "/CN=MetricFlow CA" -days 365
+
+# Server cert - SAN must match the hostname the client dials (localhost)
+openssl req -newkey rsa:4096 -nodes -keyout certs/server.key -out certs/server.csr \
+  -subj "/CN=metricflow-server"
+openssl x509 -req -in certs/server.csr -CA certs/ca.crt -CAkey certs/ca.key \
+  -CAcreateserial -out certs/server.crt -days 365 \
+  -extfile <(printf "subjectAltName=DNS:localhost")
+
+# Client cert - no SAN needed;
+openssl req -newkey rsa:4096 -nodes -keyout certs/client.key -out certs/client.csr \
+  -subj "/CN=metricflow-client"
+openssl x509 -req -in certs/client.csr -CA certs/ca.crt -CAkey certs/ca.key \
+  -CAcreateserial -out certs/client.crt -days 365
+```
+
+In the Compose stack, `./certs` is mounted read-only into the container at `/certs` rather than copied into the image itself, so the private key is never exposed in a distributable layer.
+
+**Example grpcurl** (`-cacert` = who I trust, `-cert`/`-key` = who I am):
+
+```bash
+grpcurl -cacert certs/ca.crt -cert certs/client.crt -key certs/client.key \
+  -d '{"metric_name":"cpu_usage","metric_type":"gauge","value":42.5,"measured_at":"2026-04-22T15:00:00Z"}' \
+  localhost:9091 metrics.MetricsService/IngestMetric
 ```
 
 ---

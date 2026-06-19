@@ -31,3 +31,6 @@ k8s/metricflow-secret.yaml
 
 # Go vendor directory (not used; resolve from go.mod)
 vendor/
+
+# Certs directory
+certs/
