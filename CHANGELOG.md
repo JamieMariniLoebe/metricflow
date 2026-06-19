@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-request request_id propagated into structured logs via chi RequestID middleware
 - gRPC ingestion endpoint: `MetricsService.IngestMetric` unary RPC on container port 9090 (host 9091 in Compose); shares the ingestion pipeline with the HTTP path. Submit errors map to distinct status codes: `ResourceExhausted` on shed, `Unavailable` on shutdown, `Internal` otherwise.
 - gRPC unary handler test suite (4 tests: `TestIngestMetricQueueFull`/`TestIngestMetricHappy`/`TestIngestMetricClosed`/`TestIngestMetricInvalidArgument`), driving the handler as a plain method over a real ingester steered into each error state; proves the error-to-code mapping that the ingester suite couldn't see.
+- gRPC ingestion requires mTLS: client cert signed by project CA, server enforces `RequireAndVerifyClientCert`.
 
 ### Changed
 
@@ -45,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - docker-compose Grafana provisioning mount pointed at non-existent `./grafana/provisioning`; now correctly points at `./k8s/grafana`
 - Worker goroutines were using `context.Background()`; now inherit context from a per-ingester `context.WithCancel`, and `Shutdown` propagates cancel to in-flight operations
 - Double-Shutdown close-of-closed-channel panic: Shutdown now guards on an atomic Swap, so a second call returns before re-closing the channel
+- Example gRPC client (`cmd/metricflowclient`) swallowed send failures and exited 0; now reports the error and exits non-zero.
 
 ### Known Limitations
 
